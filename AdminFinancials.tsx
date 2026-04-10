@@ -162,7 +162,7 @@ export default function AdminFinancials() {
             <span className="font-mono text-sm text-red">− {totalCost.toLocaleString()} Kz</span>
           </div>
           <div className="flex justify-between py-3">
-            <span className="font-sans font-700 text-white">RESULTADO LÍQUIDO</span>
+            <span className="font-sans font-bold text-white">RESULTADO LÍQUIDO</span>
             <span className={`font-display text-xl font-black ${netIncome >= 0 ? 'text-blue' : 'text-red'}`}>
               {netIncome >= 0 ? '+' : ''}{netIncome.toLocaleString()} Kz
             </span>

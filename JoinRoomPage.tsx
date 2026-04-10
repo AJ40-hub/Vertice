@@ -115,7 +115,7 @@ export default function JoinRoomPage() {
                   <div className="grid grid-cols-3 gap-2">
                     {['masculino', 'feminino', 'outro'].map((g) => (
                       <button key={g} onClick={() => setGender(g)}
-                        className={`border py-2.5 text-sm capitalize font-600 transition-all ${gender === g ? 'border-red bg-red/10 text-white' : 'border-white/10 text-white/40 hover:border-white/30'}`}>
+                        className={`border py-2.5 text-sm capitalize font-semibold transition-all ${gender === g ? 'border-red bg-red/10 text-white' : 'border-white/10 text-white/40 hover:border-white/30'}`}>
                         {g}
                       </button>
                     ))}

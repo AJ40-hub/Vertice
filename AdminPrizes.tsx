@@ -71,7 +71,7 @@ export default function AdminPrizes() {
             <tbody>
               {pending.map((p) => (
                 <tr key={p.id}>
-                  <td><span className="font-sans font-700 text-white">{p.winner_name}</span></td>
+                  <td><span className="font-sans font-bold text-white">{p.winner_name}</span></td>
                   <td className="capitalize text-white/50">{p.winner_gender}</td>
                   <td>
                     <a href={`https://wa.me/${p.winner_whatsapp.replace(/\D/g,'')}`} target="_blank" rel="noreferrer"
@@ -105,7 +105,7 @@ export default function AdminPrizes() {
               {delivered.map((p) => (
                 <tr key={p.id}>
                   <td className="font-mono text-white/20">Prémio {p.prize_number}</td>
-                  <td className="font-sans font-600">{p.winner_name}</td>
+                  <td className="font-sans font-semibold">{p.winner_name}</td>
                   <td className="font-mono text-white/40">{p.winner_whatsapp}</td>
                   <td className="font-mono">{p.winner_score}</td>
                   <td><span className="badge-green">{p.amount.toLocaleString()} Kz</span></td>

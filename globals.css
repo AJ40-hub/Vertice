@@ -134,7 +134,7 @@
 
   /* Button styles */
   .btn-primary {
-    @apply relative px-8 py-3 bg-red text-white font-sans font-700 text-sm tracking-widest uppercase overflow-hidden transition-all duration-200;
+    @apply relative px-8 py-3 bg-red text-white font-sans font-bold text-sm tracking-widest uppercase overflow-hidden transition-all duration-200;
   }
 
   .btn-primary::before {
@@ -150,7 +150,7 @@
   .btn-primary:hover { @apply shadow-lg; box-shadow: 0 0 30px rgba(255,45,45,0.4); }
 
   .btn-ghost {
-    @apply px-8 py-3 border border-white/20 text-white/60 font-sans font-600 text-sm tracking-widest uppercase transition-all duration-200;
+    @apply px-8 py-3 border border-white/20 text-white/60 font-sans font-semibold text-sm tracking-widest uppercase transition-all duration-200;
   }
 
   .btn-ghost:hover { @apply border-white/40 text-white; }

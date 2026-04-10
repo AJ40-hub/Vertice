@@ -106,7 +106,7 @@ export default function AdminLayout() {
               }`}
             >
               <span className="text-sm flex-shrink-0 w-5 text-center">{item.icon}</span>
-              {sidebarOpen && <span className="font-sans text-xs font-600">{item.label}</span>}
+              {sidebarOpen && <span className="font-sans text-xs font-semibold">{item.label}</span>}
               {item.badge != null && item.badge > 0 && (
                 <span className={`${sidebarOpen ? 'ml-auto' : 'absolute top-1 right-1'} bg-red text-white text-[9px] font-bold px-1.5 py-0.5 min-w-[16px] text-center`}>
                   {item.badge}
@@ -142,7 +142,7 @@ export default function AdminLayout() {
               exit={{ opacity: 0, x: 60 }}
               className="bg-surface2 border border-border p-4 shadow-2xl"
             >
-              <div className="font-sans text-sm font-700 mb-1">{t.title}</div>
+              <div className="font-sans text-sm font-bold mb-1">{t.title}</div>
               <div className="font-mono text-[10px] text-white/40 leading-relaxed">{t.message}</div>
             </motion.div>
           ))}

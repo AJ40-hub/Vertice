@@ -84,7 +84,7 @@ export default function AdminNotifications() {
               <span className="text-lg flex-shrink-0">{typeIcons[n.type] || '◉'}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-sans font-700 text-sm">{n.title}</span>
+                  <span className="font-sans font-bold text-sm">{n.title}</span>
                   {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-red flex-shrink-0" />}
                 </div>
                 <div className="font-mono text-xs text-white/40 leading-relaxed">{n.message}</div>

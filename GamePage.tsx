@@ -192,7 +192,7 @@ export default function GamePage() {
               <div className="w-2 h-2 rounded-full bg-red animate-pulse flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-mono text-[9px] text-red/60 tracking-widest">NOVA PISTA</div>
-                <div className="font-sans text-xs text-white font-600 truncate">{newClueAlert.title}</div>
+                <div className="font-sans text-xs text-white font-semibold truncate">{newClueAlert.title}</div>
               </div>
               {newClueAlert.expires_at && (
                 <div className="font-mono text-[9px] text-amber">3:30</div>
@@ -344,7 +344,7 @@ function ClueRow({ clue, onClick }: { clue: Clue; onClick: () => void }) {
     <button onClick={onClick} className="w-full flex items-center gap-3 px-3 py-2.5 border border-white/5 bg-surface3 hover:border-red/20 transition-all text-left">
       <div className="w-1.5 h-1.5 rounded-full bg-red flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="font-sans text-xs font-600 text-white truncate">{clue.title}</div>
+        <div className="font-sans text-xs font-semibold text-white truncate">{clue.title}</div>
         <div className="font-mono text-[9px] text-white/30 mt-0.5 capitalize">{clue.clue_type}</div>
       </div>
       {timeLeft !== null && (
@@ -383,7 +383,7 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
         <button onClick={onBack} className="text-white/40 hover:text-white">←</button>
-        <span className="font-sans text-sm font-600 text-white truncate">{clue.title}</span>
+        <span className="font-sans text-sm font-semibold text-white truncate">{clue.title}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-5">
         {clue.clue_type === 'photo' && content.file && (

@@ -159,7 +159,7 @@ export default function WaitingRoomPage() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />
-                <span className="font-sans font-600 text-sm">{p.name}</span>
+                <span className="font-sans font-semibold text-sm">{p.name}</span>
                 {p.is_host && <span className="font-mono text-[9px] text-white/30 border border-white/10 px-1.5 py-0.5">HOST</span>}
                 {p.id === currentPlayer?.id && <span className="font-mono text-[9px] text-red/60 border border-red/20 px-1.5 py-0.5">TU</span>}
               </div>

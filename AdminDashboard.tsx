@@ -184,7 +184,7 @@ export default function AdminDashboard() {
               {topGames.map((g, i) => (
                 <tr key={g.title}>
                   <td className="font-mono text-white/20 w-8">{i + 1}</td>
-                  <td className="font-sans font-600">{g.title}</td>
+                  <td className="font-sans font-semibold">{g.title}</td>
                   <td className="text-right font-mono">{g.plays}</td>
                 </tr>
               ))}

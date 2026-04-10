@@ -49,7 +49,7 @@ export function AdminPayments() {
             ) : payments.map((p, i) => (
               <motion.tr key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
                 <td className="px-5 font-mono text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-AO')}</td>
-                <td className="font-sans font-600">{p.payer_name}</td>
+                <td className="font-sans font-semibold">{p.payer_name}</td>
                 <td className="font-mono text-[10px] text-white/50">{p.payer_whatsapp}</td>
                 <td className="text-xs text-white/60 max-w-[120px] truncate">{p.archive_title}</td>
                 <td className="font-mono text-center">{p.num_players}</td>

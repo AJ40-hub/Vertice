@@ -275,7 +275,7 @@ export default function CreateRoomPage() {
                       <button
                         key={g}
                         onClick={() => setGender(g)}
-                        className={`border py-2.5 text-sm capitalize font-sans font-600 transition-all ${gender === g ? 'border-red bg-red/10 text-white' : 'border-white/10 text-white/40 hover:border-white/30'}`}
+                        className={`border py-2.5 text-sm capitalize font-sans font-semibold transition-all ${gender === g ? 'border-red bg-red/10 text-white' : 'border-white/10 text-white/40 hover:border-white/30'}`}
                       >{g}</button>
                     ))}
                   </div>

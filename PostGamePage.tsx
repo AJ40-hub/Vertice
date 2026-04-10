@@ -250,7 +250,7 @@ export default function PostGamePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-sans font-700 text-sm">{p.name}</span>
+                        <span className="font-sans font-bold text-sm">{p.name}</span>
                         {p.id === player?.id && <span className="font-mono text-[9px] text-red/50 border border-red/20 px-1.5">TU</span>}
                         {p.is_host && <span className="font-mono text-[9px] text-white/20 border border-white/10 px-1.5">HOST</span>}
                       </div>
