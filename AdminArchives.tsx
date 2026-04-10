@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-import type { Archive } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Archive } from './supabase'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 

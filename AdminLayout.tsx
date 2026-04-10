@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAdminAuth } from '../../store/adminAuth'
-import { useAdminRealtime } from '../../hooks/useRealtime'
-import { supabase } from '../../lib/supabase'
+import { useAdminAuth } from './adminAuth'
+import { useAdminRealtime } from './useRealtime'
+import { supabase } from './supabase'
 
 interface NavItem { path: string; label: string; icon: string; badge?: number }
 

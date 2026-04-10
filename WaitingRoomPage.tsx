@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import { usePlayersRealtime } from '../../hooks/useRealtime'
-import { assignRoles } from '../../lib/gameEngine'
-import type { Room, Player } from '../../lib/supabase'
+import { supabase } from './supabase'
+import { usePlayersRealtime } from './useRealtime'
+import { assignRoles } from './gameEngine'
+import type { Room, Player } from './supabase'
 
 export default function WaitingRoomPage() {
   const { code } = useParams<{ code: string }>()

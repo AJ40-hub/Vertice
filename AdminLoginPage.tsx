@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { useAdminAuth } from '../../store/adminAuth'
+import { useAdminAuth } from './adminAuth'
 
 export default function AdminLoginPage() {
   const navigate = useNavigate()

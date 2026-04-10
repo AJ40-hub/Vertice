@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-import type { Payment } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Payment } from './supabase'
 import { motion } from 'framer-motion'
 
 export function AdminPayments() {
@@ -67,5 +67,3 @@ export function AdminPayments() {
 }
 
 export default AdminPayments
-
-function AdminPayments() { return <AdminPayments /> }

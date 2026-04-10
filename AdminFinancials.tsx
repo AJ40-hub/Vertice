@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-import type { Payment, Prize } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Payment, Prize } from './supabase'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { format, subDays } from 'date-fns'
 

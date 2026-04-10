@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { supabase } from '../../lib/supabase'
+import { supabase } from './supabase'
 import { format, subDays, startOfDay } from 'date-fns'
 import { pt } from 'date-fns/locale'
 

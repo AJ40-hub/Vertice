@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { useGameStore } from '../store/gameStore'
-import type { Room, Player, Clue } from '../lib/supabase'
+import { supabase } from './supabase'
+import { useGameStore } from './gameStore'
+import type { Room, Player, Clue } from './supabase'
 
 export function useRoomRealtime(roomId: string | undefined) {
   const { setRoom, setPlayer, addClue, player } = useGameStore()

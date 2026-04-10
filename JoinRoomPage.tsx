@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import type { Room } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Room } from './supabase'
 
 export default function JoinRoomPage() {
   const navigate = useNavigate()

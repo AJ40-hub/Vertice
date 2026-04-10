@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-import type { Room } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Room } from './supabase'
 import { motion } from 'framer-motion'
 
 export default function AdminRooms() {

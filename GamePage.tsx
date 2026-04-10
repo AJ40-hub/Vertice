@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import { useGameStore } from '../../store/gameStore'
-import { useRoomRealtime } from '../../hooks/useRealtime'
-import { deliverPendingEvents, calculateScore } from '../../lib/gameEngine'
-import type { Room, Player, Clue } from '../../lib/supabase'
+import { supabase } from './supabase'
+import { useGameStore } from './gameStore'
+import { useRoomRealtime } from './useRealtime'
+import { deliverPendingEvents, calculateScore } from './gameEngine'
+import type { Room, Player, Clue } from './supabase'
 
 type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'clue'
 

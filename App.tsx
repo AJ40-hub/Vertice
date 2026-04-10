@@ -1,26 +1,26 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAdminAuth } from './store/adminAuth'
+import { useAdminAuth } from './adminAuth'
 
 // Landing
-import LandingPage from './pages/landing/LandingPage'
+import LandingPage from './LandingPage'
 
 // Game flow
-import CreateRoomPage from './pages/game/CreateRoomPage'
-import JoinRoomPage from './pages/game/JoinRoomPage'
-import WaitingRoomPage from './pages/game/WaitingRoomPage'
-import GamePage from './pages/game/GamePage'
-import PostGamePage from './pages/game/PostGamePage'
+import CreateRoomPage from './CreateRoomPage'
+import JoinRoomPage from './JoinRoomPage'
+import WaitingRoomPage from './WaitingRoomPage'
+import GamePage from './GamePage'
+import PostGamePage from './PostGamePage'
 
 // Admin
-import AdminLoginPage from './pages/admin/AdminLoginPage'
-import AdminLayout from './pages/admin/AdminLayout'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminRooms from './pages/admin/AdminRooms'
-import AdminArchives from './pages/admin/AdminArchives'
-import AdminPayments from './pages/admin/AdminPayments'
-import AdminPrizes from './pages/admin/AdminPrizes'
-import AdminNotifications from './pages/admin/AdminNotifications'
-import AdminFinancials from './pages/admin/AdminFinancials'
+import AdminLoginPage from './AdminLoginPage'
+import AdminLayout from './AdminLayout'
+import AdminDashboard from './AdminDashboard'
+import AdminRooms from './AdminRooms'
+import AdminArchives from './AdminArchives'
+import AdminPayments from './AdminPayments'
+import AdminPrizes from './AdminPrizes'
+import AdminNotifications from './AdminNotifications'
+import AdminFinancials from './AdminFinancials'
 
 function ProtectedAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAdminAuth()

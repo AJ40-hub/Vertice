@@ -1,8 +1,8 @@
 // AdminPrizes.tsx
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import type { Prize } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Prize } from './supabase'
 import toast from 'react-hot-toast'
 
 export default function AdminPrizes() {

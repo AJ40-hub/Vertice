@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import { useGameStore } from '../../store/gameStore'
-import type { Player, Ranking } from '../../lib/supabase'
+import { supabase } from './supabase'
+import { useGameStore } from './gameStore'
+import type { Player, Ranking } from './supabase'
 
 export default function PostGamePage() {
   const { code } = useParams<{ code: string }>()

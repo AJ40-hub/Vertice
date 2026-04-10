@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import type { Archive } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Archive } from './supabase'
 
 export default function LandingPage() {
   const navigate = useNavigate()

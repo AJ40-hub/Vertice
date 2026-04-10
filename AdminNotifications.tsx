@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
-import type { Notification } from '../../lib/supabase'
+import { supabase } from './supabase'
+import type { Notification } from './supabase'
 import { motion } from 'framer-motion'
 
 export default function AdminNotifications() {

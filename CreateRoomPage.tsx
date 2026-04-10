@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
-import type { Archive } from '../../lib/supabase'
-import { generateRoomCode } from '../../lib/gameEngine'
+import { supabase } from './supabase'
+import type { Archive } from './supabase'
+import { generateRoomCode } from './gameEngine'
 
 type Step = 'archive' | 'players' | 'payment' | 'data'
 

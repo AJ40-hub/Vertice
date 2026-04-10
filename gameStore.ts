@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Room, Player, Clue } from '../lib/supabase'
+import type { Room, Player, Clue } from './supabase'
 
 interface GameState {
   room: Room | null
