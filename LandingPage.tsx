@@ -21,7 +21,7 @@ export default function LandingPage() {
     const interval = setInterval(() => {
       setGlitchActive(true)
       setTimeout(() => setGlitchActive(false), 300)
-    }, 7000)
+    }, 3000)
     return () => clearInterval(interval)
   }, [])
 
