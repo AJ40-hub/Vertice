@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { supabase } from './supabase'
 import type { Archive } from './supabase'
-import { generateRoomCode } from './gameEngine'
 
 type Step = 'archive' | 'players' | 'payment' | 'data'
 
@@ -15,7 +14,6 @@ export default function CreateRoomPage() {
   const [numPlayers, setNumPlayers] = useState(6)
   const [paymentMode, setPaymentMode] = useState<'host' | 'individual'>('host')
   const [loading, setLoading] = useState(false)
-  const [roomCode, setRoomCode] = useState('')
   const [error, setError] = useState('')
 
   // Host data
@@ -37,88 +35,36 @@ export default function CreateRoomPage() {
     setError('')
 
     try {
-      let code = generateRoomCode()
-      // Garantir unicidade
-      let exists = true
-      while (exists) {
-        const { data } = await supabase.from('rooms').select('id').eq('code', code).single()
-        if (!data) exists = false
-        else code = generateRoomCode()
+      const response = await fetch('/api/create-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archive_id: selectedArchive.id,
+          num_players: numPlayers,
+          payment_mode: paymentMode,
+          total_amount: totalAmount,
+          name: name.trim(),
+          gender,
+          whatsapp: whatsapp.trim()
+        })
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.error || 'Erro ao criar sala.')
       }
 
-      setRoomCode(code)
+      sessionStorage.setItem('vertice_room', JSON.stringify(data.room))
+      sessionStorage.setItem('vertice_player', JSON.stringify(data.player))
 
-      // Create room
-      const { data: room, error: roomErr } = await supabase.from('rooms').insert({
-        code,
-        archive_id: selectedArchive.id,
-        num_players: numPlayers,
-        payment_mode: paymentMode,
-        total_amount: totalAmount,
-        payment_status: 'paid', // Simulado - integrar gateway real
-        status: 'waiting',
-      }).select().single()
-
-    if (roomErr || !room) {
-      setError(`Erro ao criar sala: ${roomErr?.message || 'falha na criação da sala'}`)
       setLoading(false)
-      return
-    }
-
-    // Create host player
-    const { data: player, error: playerErr } = await supabase.from('players').insert({
-      room_id: room.id,
-      name: name.trim(),
-      gender,
-      whatsapp: whatsapp.trim(),
-      is_host: true,
-    }).select().single()
-
-    if (playerErr || !player) {
-      setError(`Erro ao criar host: ${playerErr?.message || 'falha no registo do host'}`)
+      navigate(`/sala/${data.room.code}/espera`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocorreu um erro inesperado. Tenta novamente.')
+      console.error('Create room error:', err)
       setLoading(false)
-      return
     }
-
-    // Register payment
-    const { error: paymentErr } = await supabase.from('payments').insert({
-      room_id: room.id,
-      payer_name: name.trim(),
-      payer_whatsapp: whatsapp.trim(),
-      archive_title: `${selectedArchive.title}: ${selectedArchive.subtitle}`,
-      num_players: numPlayers,
-      amount: totalAmount,
-      payment_mode: paymentMode,
-      status: 'confirmed',
-      reference: `VRT-${code}`,
-    })
-
-    if (paymentErr) {
-      setError(`Erro no registo de pagamento: ${paymentErr.message}`)
-      setLoading(false)
-      return
-    }
-
-    // Update room with host
-    const { error: roomUpdateErr } = await supabase.from('rooms').update({ host_player_id: player.id }).eq('id', room.id)
-    if (roomUpdateErr) {
-      setError(`Erro ao atualizar sala: ${roomUpdateErr.message}`)
-      setLoading(false)
-      return
-    }
-
-    // Save to session
-    sessionStorage.setItem('vertice_room', JSON.stringify(room))
-    sessionStorage.setItem('vertice_player', JSON.stringify(player))
-
-    setLoading(false)
-    navigate(`/sala/${code}/espera`)
-  } catch (err) {
-    setError(`Ocorreu um erro inesperado. Tenta novamente.`)
-    console.error('Create room error:', err)
-    setLoading(false)
   }
-}
 
   return (
     <div className="min-h-screen bg-black grain flex flex-col">
