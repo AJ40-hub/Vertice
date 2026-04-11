@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VÉRTICE — Criar Sala</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;color:#fff;font-family:sans-serif;min-height:100vh;}
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 85% 15%,rgba(255,45,45,.07),transparent 55%),radial-gradient(ellipse at 8% 85%,rgba(0,174,239,.05),transparent 50%);pointer-events:none;z-index:0;}
+header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(0,0,0,.9);}
+.logo{font-size:19px;font-weight:900;letter-spacing:.08em;cursor:pointer;font-family:serif;}
+.logo .r{color:#FF2D2D;}
+.logo-s{font-size:8px;color:rgba(255,255,255,.2);letter-spacing:.25em;margin-top:2px;font-family:monospace;}
+.back{font-size:10px;color:rgba(255,255,255,.4);letter-spacing:.15em;cursor:pointer;border:1px solid rgba(255,255,255,.08);padding:7px 14px;font-family:monospace;transition:all .2s;background:transparent;}
+.back:hover{color:#fff;border-color:rgba(255,255,255,.2);}
+.prog{position:relative;z-index:10;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(0,0,0,.6);}
+.prog-in{max-width:660px;margin:0 auto;padding:16px 40px;display:flex;align-items:center;}
+.stp{display:flex;align-items:center;gap:8px;flex:1;}
+.sn{width:24px;height:24px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:10px;color:rgba(255,255,255,.2);font-family:monospace;transition:all .3s;}
+.stp.act .sn{border-color:#FF2D2D;background:#FF2D2D;color:#fff;}
+.stp.done .sn{border-color:rgba(255,45,45,.3);color:rgba(255,45,45,.5);}
+.sl{font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.2);font-family:monospace;}
+.stp.act .sl{color:rgba(255,255,255,.6);}
+.stp.done .sl{color:rgba(255,45,45,.4);}
+.cn{flex:1;height:1px;background:rgba(255,255,255,.08);margin:0 6px;transition:background .3s;}
+.cn.done{background:rgba(255,45,45,.28);}
+.content{position:relative;z-index:10;max-width:660px;margin:0 auto;padding:44px 40px 120px;}
+.sv{animation:fu .45s ease both;}
+@keyframes fu{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.ey{font-size:9px;color:rgba(255,45,45,.6);letter-spacing:.3em;text-transform:uppercase;margin-bottom:8px;font-family:monospace;}
+.stit{font-family:serif;font-size:2.3rem;font-weight:700;line-height:1.1;margin-bottom:7px;}
+.sdesc{font-size:13px;color:rgba(255,255,255,.4);line-height:1.6;margin-bottom:36px;}
+.archs{display:flex;flex-direction:column;gap:11px;margin-bottom:36px;}
+.acard{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:#0a0a0a;padding:24px;cursor:pointer;transition:border-color .25s,transform .18s;}
+.acard:hover,.acard.sel{border-color:rgba(255,45,45,.35);transform:translateY(-1px);}
+.acard.sel{background:rgba(255,45,45,.04);}
+.acard.off{opacity:.2;cursor:not-allowed;pointer-events:none;}
+.topline{position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(to right,transparent,#FF2D2D,transparent);transform:scaleX(0);transition:transform .35s ease;}
+.acard:hover .topline,.acard.sel .topline{transform:scaleX(1);}
+.botline{position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(to right,#FF2D2D,#00AEEF);transform:scaleX(0);transform-origin:left;transition:transform .35s ease;}
+.acard:hover .botline,.acard.sel .botline{transform:scaleX(1);}
+.at{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.atag{font-size:8px;color:rgba(255,45,45,.7);letter-spacing:.3em;text-transform:uppercase;margin-bottom:5px;font-family:monospace;}
+.atit{font-family:serif;font-size:20px;font-weight:700;}
+.ar{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;margin-left:12px;}
+.adur{font-size:8px;color:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.08);padding:3px 8px;font-family:monospace;}
+.abadge{font-size:8px;color:rgba(0,255,136,.7);border:1px solid rgba(0,255,136,.18);padding:3px 8px;display:flex;align-items:center;gap:4px;font-family:monospace;}
+.bd{width:5px;height:5px;border-radius:50%;background:#00FF88;animation:lp 2s ease-in-out infinite;}
+@keyframes lp{0%,100%{opacity:1}50%{opacity:.5}}
+.adesc{font-size:13px;color:rgba(255,255,255,.38);line-height:1.6;margin-bottom:14px;}
+.abot{display:flex;justify-content:space-between;align-items:center;}
+.ameta{display:flex;gap:12px;}
+.ami{font-size:9px;color:rgba(255,255,255,.2);display:flex;align-items:center;gap:4px;font-family:monospace;}
+.amd{width:3px;height:3px;border-radius:50%;background:rgba(255,45,45,.45);}
+.aprice{font-family:serif;font-size:19px;font-weight:700;}
+.aprice small{font-size:9px;color:rgba(255,255,255,.2);font-weight:400;font-family:monospace;}
+.asel-ind{position:absolute;right:16px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .3s;opacity:0;}
+.acard.sel .asel-ind{border-color:#FF2D2D;background:#FF2D2D;opacity:1;}
+/* STEP 2 */
+.psel{display:flex;align-items:center;justify-content:center;gap:22px;margin-bottom:28px;}
+.psb{width:48px;height:48px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#fff;font-size:20px;cursor:pointer;transition:all .2s;}
+.psb:hover{border-color:rgba(255,45,45,.5);color:#FF2D2D;}
+.psnum{font-family:serif;font-size:5.5rem;font-weight:900;line-height:1;text-align:center;}
+.pslbl{font-size:8px;color:rgba(255,255,255,.2);letter-spacing:.28em;text-align:center;margin-top:2px;font-family:monospace;}
+.dots{display:flex;gap:7px;justify-content:center;margin-bottom:32px;}
+.dot{width:9px;height:9px;border-radius:50%;transition:all .3s;}
+.don{background:#FF2D2D;box-shadow:0 0 7px rgba(255,45,45,.4);}
+.dof{background:rgba(255,255,255,.08);}
+.pm-lbl{font-size:9px;color:rgba(255,255,255,.2);letter-spacing:.28em;text-transform:uppercase;margin-bottom:12px;font-family:monospace;}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:28px;}
+.popt{border:1px solid rgba(255,255,255,.08);background:#0a0a0a;padding:16px;cursor:pointer;transition:all .22s;}
+.popt:hover{border-color:rgba(255,45,45,.28);}
+.popt.sel{border-color:#FF2D2D;background:rgba(255,45,45,.05);}
+.pot{font-size:13px;font-weight:700;margin-bottom:4px;}
+.pos{font-size:9px;color:rgba(255,255,255,.3);font-family:monospace;}
+.tbox{border:1px solid rgba(255,255,255,.08);background:#0a0a0a;padding:20px;}
+.trow{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+.tl{font-size:10px;color:rgba(255,255,255,.3);font-family:monospace;}
+.tv{font-size:12px;font-family:monospace;}
+.tdiv{height:1px;background:rgba(255,255,255,.08);margin:10px 0;}
+.ttot{font-family:serif;font-size:28px;font-weight:900;margin-top:6px;}
+/* STEP 3 */
+.ambox{border:1px solid rgba(255,184,0,.18);background:rgba(255,184,0,.04);padding:16px;margin-bottom:24px;}
+.amt{font-size:8px;color:rgba(255,184,0,.65);letter-spacing:.28em;margin-bottom:7px;font-family:monospace;}
+.amd2{font-size:13px;color:rgba(255,255,255,.4);line-height:1.55;}
+/* STEP 4 */
+.ig{margin-bottom:18px;}
+.il{font-size:9px;color:rgba(255,255,255,.2);letter-spacing:.28em;text-transform:uppercase;margin-bottom:9px;font-family:monospace;}
+.inp{width:100%;background:#111;border:1px solid rgba(255,255,255,.1);border-bottom:2px solid #FF2D2D;color:#fff;font-size:14px;padding:12px 14px;outline:none;transition:box-shadow .2s;}
+.inp:focus{box-shadow:0 4px 18px rgba(255,45,45,.14);}
+.inp::placeholder{color:rgba(255,255,255,.14);}
+.ggrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+.gbtn{padding:11px;border:1px solid rgba(255,255,255,.1);background:transparent;color:rgba(255,255,255,.4);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;}
+.gbtn:hover{border-color:rgba(255,45,45,.28);color:rgba(255,255,255,.6);}
+.gbtn.sel{border-color:#FF2D2D;background:rgba(255,45,45,.09);color:#fff;}
+/* STICKY BOTTOM */
+.sbot{position:sticky;bottom:0;z-index:50;background:linear-gradient(to top,rgba(0,0,0,.97) 55%,transparent);padding:16px 40px 24px;}
+.sbot-in{max-width:660px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;}
+.binfo{font-size:10px;color:rgba(255,255,255,.3);font-family:monospace;}
+.binfo span{color:#fff;}
+.bbtns{display:flex;gap:9px;}
+.bbck{padding:12px 24px;background:transparent;color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.12);cursor:pointer;font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;transition:all .2s;}
+.bbck:hover{border-color:rgba(255,255,255,.3);color:#fff;}
+.bnxt{position:relative;overflow:hidden;padding:12px 34px;background:#FF2D2D;color:#fff;border:none;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;transition:all .25s;}
+.bnxt::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.14) 50%,transparent 70%);transform:translateX(-100%);transition:transform .5s;}
+.bnxt:hover::after{transform:translateX(100%);}
+.bnxt:hover{box-shadow:0 0 28px rgba(255,45,45,.42);}
+.bnxt:disabled{opacity:.25;pointer-events:none;}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<header>
+  <div><div class="logo">VÉ<span class="r">R</span>TICE</div><div class="logo-s">PLATAFORMA DE INVESTIGAÇÃO IMERSIVA</div></div>
+  <button class="back" onclick="history.back()">← Voltar</button>
+</header>
+<div class="prog">
+  <div class="prog-in">
+    <div class="stp act" id="s1"><div class="sn">1</div><div class="sl">Arquivo</div></div>
+    <div class="cn" id="c1"></div>
+    <div class="stp" id="s2"><div class="sn">2</div><div class="sl">Jogadores</div></div>
+    <div class="cn" id="c2"></div>
+    <div class="stp" id="s3"><div class="sn">3</div><div class="sl">Pagamento</div></div>
+    <div class="cn" id="c3"></div>
+    <div class="stp" id="s4"><div class="sn">4</div><div class="sl">Os teus dados</div></div>
+  </div>
+</div>
+<div class="content">
+  <!-- S1 -->
+  <div id="v1" class="sv">
+    <div class="ey">Passo 1 de 4</div>
+    <h2 class="stit">Escolhe o Caso</h2>
+    <p class="sdesc">Seleciona o arquivo que queres jogar com o teu grupo.</p>
+    <div class="archs">
+      <div class="acard" id="ac1" onclick="selA()">
+        <div class="topline"></div>
+        <div class="at">
+          <div><div class="atag">Arquivo 01</div><div class="atit">Última Conexão</div></div>
+          <div class="ar"><div class="adur">90 min</div><div class="abadge"><div class="bd"></div>Disponível</div></div>
+        </div>
+        <p class="adesc">Kairo desapareceu. Mas desde o início… vocês estavam a investigar com a versão digital dele. Identidade, IA, controlo. A verdade tem duas faces.</p>
+        <div class="abot">
+          <div class="ameta"><div class="ami"><div class="amd"></div>5–8 jogadores</div><div class="ami"><div class="amd"></div>Mistério psicológico</div><div class="ami"><div class="amd"></div>IA + Roleplay</div></div>
+          <div class="aprice">500 Kz <small>/ jogador</small></div>
+        </div>
+        <div class="asel-ind">✓</div>
+        <div class="botline"></div>
+      </div>
+      <div class="acard off">
+        <div class="at">
+          <div><div class="atag" style="color:rgba(255,255,255,.1)">Arquivo 02</div><div class="atit" style="color:rgba(255,255,255,.15)">Em Breve</div></div>
+          <div class="adur" style="color:rgba(255,255,255,.08);border-color:rgba(255,255,255,.04)">—</div>
+        </div>
+        <p class="adesc" style="color:rgba(255,255,255,.1)">O próximo caso está a ser construído.</p>
+        <div class="abot"><div class="ameta"><div class="ami" style="color:rgba(255,255,255,.08)">—</div></div><div class="aprice" style="color:rgba(255,255,255,.1)">—</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- S2 -->
+  <div id="v2" class="sv" style="display:none">
+    <div class="ey">Passo 2 de 4</div>
+    <h2 class="stit">Número de Jogadores</h2>
+    <p class="sdesc">Quantos vão jogar? Mínimo 5, máximo 8 jogadores.</p>
+    <div class="psel">
+      <button class="psb" onclick="chP(-1)">−</button>
+      <div><div class="psnum" id="pn">6</div><div class="pslbl">JOGADORES</div></div>
+      <button class="psb" onclick="chP(1)">+</button>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="pm-lbl">Modo de Pagamento</div>
+    <div class="pgrid">
+      <div class="popt sel" id="ph" onclick="chPay('host')"><div class="pot">Host paga tudo</div><div class="pos">Um pagamento único pelo grupo</div></div>
+      <div class="popt" id="pi" onclick="chPay('ind')"><div class="pot">Cada um paga</div><div class="pos">Link individual por jogador</div></div>
+    </div>
+    <div class="tbox">
+      <div class="trow"><div class="tl" id="tl">6 jogadores × 500 Kz</div><div class="tv" id="tv">3.000 Kz</div></div>
+      <div class="tdiv"></div>
+      <div class="trow"><div class="tl">TOTAL</div><div class="tl" id="tpm">Pagamento único</div></div>
+      <div class="ttot" id="tt">3.000 Kz</div>
+    </div>
+  </div>
+  <!-- S3 -->
+  <div id="v3" class="sv" style="display:none">
+    <div class="ey">Passo 3 de 4</div>
+    <h2 class="stit">Pagamento</h2>
+    <p class="sdesc">Confirma os detalhes e efetua o pagamento para criar a sala.</p>
+    <div class="tbox" style="margin-bottom:18px;">
+      <div style="font-size:8px;color:rgba(255,45,45,.55);letter-spacing:.3em;text-transform:uppercase;margin-bottom:14px;font-family:monospace;">Resumo</div>
+      <div class="trow"><div class="tl">Arquivo</div><div style="font-weight:700;font-size:13px;">Arquivo 01: Última Conexão</div></div>
+      <div class="trow"><div class="tl">Jogadores</div><div class="tv" id="s3p">6</div></div>
+      <div class="trow"><div class="tl">Preço / jogador</div><div class="tv">500 Kz</div></div>
+      <div class="trow"><div class="tl">Modo</div><div class="tv" id="s3m">Host paga tudo</div></div>
+      <div class="tdiv"></div>
+      <div class="trow"><div class="tl">TOTAL</div><div class="ttot" id="s3t">3.000 Kz</div></div>
+    </div>
+    <div class="ambox"><div class="amt">Método de Pagamento</div><div class="amd2">O método de pagamento (Multicaixa Express / Transferência) será integrado em breve. Por agora a sala é criada automaticamente após confirmação.</div></div>
+  </div>
+  <!-- S4 -->
+  <div id="v4" class="sv" style="display:none">
+    <div class="ey">Passo 4 de 4</div>
+    <h2 class="stit">Os teus dados</h2>
+    <p class="sdesc">Para entrares na sala como anfitrião.</p>
+    <div class="ig"><div class="il">Nome</div><input class="inp" id="iname" placeholder="O teu nome completo" oninput="chkF()"/></div>
+    <div class="ig"><div class="il">Género</div><div class="ggrid"><button class="gbtn" onclick="selG('masculino',this)">Masculino</button><button class="gbtn" onclick="selG('feminino',this)">Feminino</button><button class="gbtn" onclick="selG('outro',this)">Outro</button></div></div>
+    <div class="ig"><div class="il">WhatsApp</div><input class="inp" style="font-family:monospace" id="iwa" placeholder="+244 9xx xxx xxx" oninput="chkF()"/></div>
+  </div>
+</div>
+<div class="sbot">
+  <div class="sbot-in">
+    <div class="binfo" id="bi">Seleciona um arquivo para continuar</div>
+    <div class="bbtns">
+      <button class="bbck" id="bb" style="display:none" onclick="prevS()">← Voltar</button>
+      <button class="bnxt" id="bn" onclick="nxtS()" disabled>Continuar →</button>
+    </div>
+  </div>
+</div>
+<script>
+let cur=1,aSel=false,nP=6,payM='host',gSel=null;
+function mkDots(){const d=document.getElementById('dots');d.innerHTML='';for(let i=0;i<8;i++){const el=document.createElement('div');el.className='dot '+(i<nP?'don':'dof');d.appendChild(el);}}
+mkDots();
+function selA(){const c=document.getElementById('ac1');c.classList.toggle('sel');aSel=c.classList.contains('sel');document.getElementById('bn').disabled=!aSel;document.getElementById('bi').innerHTML=aSel?'<span>Arquivo 01</span> selecionado':'Seleciona um arquivo para continuar';}
+function chP(d){nP=Math.max(5,Math.min(8,nP+d));document.getElementById('pn').textContent=nP;updT();mkDots();}
+function chPay(m){payM=m;document.getElementById('ph').className='popt'+(m==='host'?' sel':'');document.getElementById('pi').className='popt'+(m==='ind'?' sel':'');updT();}
+function updT(){const t=(nP*500).toLocaleString('pt-PT');document.getElementById('tl').textContent=nP+' jogadores × 500 Kz';document.getElementById('tv').textContent=t+' Kz';document.getElementById('tpm').textContent=payM==='host'?'Pagamento único':nP+' links';document.getElementById('tt').textContent=t+' Kz';document.getElementById('bi').innerHTML='<span>'+nP+' jogadores</span> — '+t+' Kz';}
+function selG(g,btn){gSel=g;document.querySelectorAll('.gbtn').forEach(b=>b.className='gbtn');btn.className='gbtn sel';chkF();}
+function chkF(){const ok=document.getElementById('iname').value.trim()&&gSel&&document.getElementById('iwa').value.trim();document.getElementById('bn').disabled=!ok;document.getElementById('bi').textContent=ok?'Tudo pronto — clica para entrar':'Preenche todos os campos';}
+function updProg(){for(let i=1;i<=4;i++){document.getElementById('s'+i).className='stp'+(i===cur?' act':i<cur?' done':'');}for(let i=1;i<=3;i++){document.getElementById('c'+i).className='cn'+(i<cur?' done':'');}}
+function show(n){document.getElementById('v'+cur).style.display='none';cur=n;const el=document.getElementById('v'+cur);el.style.display='block';el.style.opacity='0';el.style.transform='translateY(14px)';setTimeout(()=>{el.style.transition='opacity .4s,transform .4s';el.style.opacity='1';el.style.transform='translateY(0)';},10);updProg();document.getElementById('bb').style.display=cur>1?'block':'none';const bn=document.getElementById('bn');if(cur===1){bn.disabled=!aSel;bn.textContent='Continuar →';}else if(cur===2){bn.disabled=false;bn.textContent='Continuar →';updT();}else if(cur===3){bn.disabled=false;bn.textContent='Confirmar Pagamento →';document.getElementById('s3p').textContent=nP;document.getElementById('s3m').textContent=payM==='host'?'Host paga tudo':'Individual';document.getElementById('s3t').textContent=(nP*500).toLocaleString('pt-PT')+' Kz';}else if(cur===4){bn.textContent='Entrar na Sala →';chkF();}}
+function nxtS(){if(cur<4){show(cur+1);}else{alert('Sala criada com sucesso! Código: KRVX\nA redirecionar para a Sala de Espera...');}}
+function prevS(){if(cur>1)show(cur-1);}
+</script>
+</body>
+</html>
