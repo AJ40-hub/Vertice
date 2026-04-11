@@ -16,6 +16,7 @@ export default function CreateRoomPage() {
   const [paymentMode, setPaymentMode] = useState<'host' | 'individual'>('host')
   const [loading, setLoading] = useState(false)
   const [roomCode, setRoomCode] = useState('')
+  const [error, setError] = useState('')
 
   // Host data
   const [name, setName] = useState('')
@@ -33,28 +34,30 @@ export default function CreateRoomPage() {
   async function createRoom() {
     if (!selectedArchive || !name || !gender || !whatsapp) return
     setLoading(true)
+    setError('')
 
-    let code = generateRoomCode()
-    // Garantir unicidade
-    let exists = true
-    while (exists) {
-      const { data } = await supabase.from('rooms').select('id').eq('code', code).single()
-      if (!data) exists = false
-      else code = generateRoomCode()
-    }
+    try {
+      let code = generateRoomCode()
+      // Garantir unicidade
+      let exists = true
+      while (exists) {
+        const { data } = await supabase.from('rooms').select('id').eq('code', code).single()
+        if (!data) exists = false
+        else code = generateRoomCode()
+      }
 
-    setRoomCode(code)
+      setRoomCode(code)
 
-    // Create room
-    const { data: room, error: roomErr } = await supabase.from('rooms').insert({
-      code,
-      archive_id: selectedArchive.id,
-      num_players: numPlayers,
-      payment_mode: paymentMode,
-      total_amount: totalAmount,
-      payment_status: 'paid', // Simulado - integrar gateway real
-      status: 'waiting',
-    }).select().single()
+      // Create room
+      const { data: room, error: roomErr } = await supabase.from('rooms').insert({
+        code,
+        archive_id: selectedArchive.id,
+        num_players: numPlayers,
+        payment_mode: paymentMode,
+        total_amount: totalAmount,
+        payment_status: 'paid', // Simulado - integrar gateway real
+        status: 'waiting',
+      }).select().single()
 
     if (roomErr || !room) {
       setError(`Erro ao criar sala: ${roomErr?.message || 'falha na criação da sala'}`)
@@ -110,7 +113,12 @@ export default function CreateRoomPage() {
 
     setLoading(false)
     navigate(`/sala/${code}/espera`)
+  } catch (err) {
+    setError(`Ocorreu um erro inesperado. Tenta novamente.`)
+    console.error('Create room error:', err)
+    setLoading(false)
   }
+}
 
   return (
     <div className="min-h-screen bg-black grain flex flex-col">
