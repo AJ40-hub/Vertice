@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from './supabase'
@@ -14,6 +14,8 @@ export default function WaitingRoomPage() {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [glitch, setGlitch] = useState(false)
+  const countdownStartedRef = useRef(false)
+  const countdownIntervalRef = useRef<number | null>(null)
 
   useEffect(() => {
     const r = sessionStorage.getItem('vertice_room')
@@ -27,10 +29,19 @@ export default function WaitingRoomPage() {
     setPlayers(updated)
 
     // Check if full
-    if (room && updated.length >= room.num_players && countdown === null) {
+    if (room && updated.length >= room.num_players && !countdownStartedRef.current) {
       startCountdown(room, updated)
     }
   })
+
+  // Clear countdown interval if user leaves
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current !== null) {
+        clearInterval(countdownIntervalRef.current)
+      }
+    }
+  }, [])
 
   // Watch room status changes
   useEffect(() => {
@@ -49,6 +60,7 @@ export default function WaitingRoomPage() {
   }, [room?.id])
 
   async function startCountdown(r: Room, allPlayers: Player[]) {
+    countdownStartedRef.current = true
     setCountdown(10)
 
     // Assign roles
@@ -64,14 +76,24 @@ export default function WaitingRoomPage() {
 
     // Countdown
     let t = 10
-    const interval = setInterval(() => {
-      t--
+    countdownIntervalRef.current = window.setInterval(() => {
+      t -= 1
       setCountdown(t)
-      if (t % 3 === 0) { setGlitch(true); setTimeout(() => setGlitch(false), 200) }
+      if (t % 3 === 0 && t > 0) {
+        setGlitch(true)
+        window.setTimeout(() => setGlitch(false), 200)
+      }
+
       if (t <= 0) {
-        clearInterval(interval)
-        // Start game
-        supabase.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('id', r.id)
+        if (countdownIntervalRef.current !== null) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+        }
+        setCountdown(0)
+        setGlitch(true)
+        window.setTimeout(() => {
+          supabase.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('id', r.id)
+        }, 800)
       }
     }, 1000)
   }
@@ -93,7 +115,7 @@ export default function WaitingRoomPage() {
 
       {/* Countdown overlay */}
       <AnimatePresence>
-        {countdown !== null && countdown > 0 && (
+        {countdown !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
