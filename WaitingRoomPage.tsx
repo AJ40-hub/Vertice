@@ -77,24 +77,27 @@ export default function WaitingRoomPage() {
     // Countdown
     let t = 10
     countdownIntervalRef.current = window.setInterval(() => {
-      t -= 1
-      setCountdown(t)
-      if (t % 3 === 0 && t > 0) {
-        setGlitch(true)
-        window.setTimeout(() => setGlitch(false), 200)
+      if (t > 1) {
+        t -= 1
+        setCountdown(t)
+
+        if (t % 3 === 0) {
+          setGlitch(true)
+          window.setTimeout(() => setGlitch(false), 200)
+        }
+        return
       }
 
-      if (t <= 0) {
-        if (countdownIntervalRef.current !== null) {
-          clearInterval(countdownIntervalRef.current)
-          countdownIntervalRef.current = null
-        }
-        setCountdown(0)
-        setGlitch(true)
-        window.setTimeout(() => {
-          supabase.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('id', r.id)
-        }, 800)
+      // Final tick: keep showing 1 and start the game without ever displaying 0
+      if (countdownIntervalRef.current !== null) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
       }
+      setGlitch(true)
+      window.setTimeout(() => setGlitch(false), 400)
+      window.setTimeout(() => {
+        supabase.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('id', r.id)
+      }, 900)
     }, 1000)
   }
 
