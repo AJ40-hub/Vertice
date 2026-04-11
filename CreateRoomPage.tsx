@@ -134,7 +134,6 @@ export default function CreateRoomPage() {
                     <div className="text-white/40 text-sm mb-3">{a.description}</div>
                     <div className="flex justify-between items-center">
                       <span className="font-mono text-xs text-white/30">{a.min_players}–{a.max_players} jogadores · {a.duration_minutes}min</span>
-                      <span className="font-mono text-sm font-bold">{a.price_per_player} Kz/jogador</span>
                     </div>
                   </div>
                 ))}

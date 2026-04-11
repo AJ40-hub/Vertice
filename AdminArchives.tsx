@@ -24,6 +24,7 @@ export default function AdminArchives() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const storageBucket = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET as string | undefined
+  const bucketConfigured = Boolean(storageBucket)
 
   useEffect(() => { loadArchives() }, [])
 
@@ -58,7 +59,9 @@ export default function AdminArchives() {
     setFileManagerArchive(archive)
     setCurrentFolder('')
     setSelectedFiles(null)
-    await loadArchiveFiles(archive, '')
+    if (bucketConfigured) {
+      await loadArchiveFiles(archive, '')
+    }
   }
 
   async function loadArchiveFiles(archive: Archive, folder = '') {
@@ -263,22 +266,29 @@ export default function AdminArchives() {
 
       {fileManagerArchive && (
         <div className="mt-10 border border-white/10 bg-surface2 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="font-mono text-[9px] text-red/60 tracking-widest mb-1">GESTÃO DE FICHEIROS</div>
-              <div className="font-display text-xl font-bold">{fileManagerArchive.title}</div>
-              <div className="font-mono text-[10px] text-white/40">Bucket: <span className="text-white">{storageBucket}</span> · Pasta: <span className="text-white">{fileManagerArchive.slug}</span></div>
+          <div className="flex flex-col gap-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-mono text-[9px] text-red/60 tracking-widest mb-1">GESTÃO DE FICHEIROS</div>
+                <div className="font-display text-xl font-bold">{fileManagerArchive.title}</div>
+                <div className="font-mono text-[10px] text-white/40">Bucket: <span className="text-white">{storageBucket || 'não configurado'}</span> · Pasta: <span className="text-white">{fileManagerArchive.slug}</span></div>
+              </div>
+              <button onClick={() => setFileManagerArchive(null)} className="btn-ghost text-xs">Fechar</button>
             </div>
-            <button onClick={() => setFileManagerArchive(null)} className="btn-ghost text-xs">Fechar</button>
+            {!bucketConfigured && (
+              <div className="rounded border border-amber/30 bg-amber/5 p-3 text-amber text-sm">
+                VITE_SUPABASE_STORAGE_BUCKET não está configurado no `.env`. Defina-o e reinicie o servidor para gerir ficheiros.
+              </div>
+            )}
           </div>
 
           <div className="mb-6 grid gap-4 md:grid-cols-[1fr_auto] items-end">
             <div>
               <label className="font-mono text-[9px] text-white/30 block mb-2">Enviar ficheiros para o arquivo</label>
-              <input ref={fileInputRef} type="file" multiple className="w-full text-sm text-white" onChange={e => setSelectedFiles(e.target.files)} />
+              <input ref={fileInputRef} type="file" multiple className="w-full text-sm text-white" onChange={e => setSelectedFiles(e.target.files)} disabled={!bucketConfigured} />
             </div>
-            <button onClick={handleFileUpload} disabled={uploadingFiles}
-              className="btn-primary w-full md:w-auto">
+            <button onClick={handleFileUpload} disabled={uploadingFiles || !bucketConfigured}
+              className="btn-primary w-full md:w-auto disabled:opacity-40">
               {uploadingFiles ? 'A enviar...' : 'Enviar ficheiros'}
             </button>
           </div>
@@ -303,7 +313,11 @@ export default function AdminArchives() {
             <div className="mb-4 font-mono text-[10px] text-white/40">Caminho: <span className="text-white">{fileManagerArchive?.slug}/{currentFolder}</span></div>
           )}
 
-          {folderItems.folders.length > 0 && (
+          {!bucketConfigured ? (
+            <div className="rounded border border-amber/20 bg-amber/5 p-4 text-amber text-sm">
+              Para listar ou gerir ficheiros, defina `VITE_SUPABASE_STORAGE_BUCKET` no `.env` e reinicie o servidor.
+            </div>
+          ) : folderItems.folders.length > 0 && (
             <div className="mb-4 grid gap-2 sm:grid-cols-2">
               {folderItems.folders.map((folder) => (
                 <button key={folder} onClick={() => {

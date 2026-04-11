@@ -177,12 +177,12 @@ export default function WaitingRoomPage() {
         </div>
 
         {filled < total ? (
-          <div className="font-mono text-xs text-white/20 animate-pulse tracking-widest">
-            A aguardar {total - filled} jogador{total - filled !== 1 ? 'es' : ''}…
+          <div className="font-mono text-xs text-white/20 animate-pulse tracking-widest uppercase">
+            FALTAM {total - filled} JOGADOR{total - filled !== 1 ? 'ES' : ''} PARA INICIAR
           </div>
         ) : (
-          <div className="font-mono text-xs text-green tracking-widest">
-            SALA COMPLETA — A INICIAR…
+          <div className="font-mono text-xs text-green tracking-widest uppercase">
+            SALA COMPLETA — A INICIAR EM BREVE
           </div>
         )}
       </div>
