@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" fill="#000"/>
-  <polygon points="16,4 28,26 4,26" fill="none" stroke="#FF2D2D" stroke-width="2"/>
-  <circle cx="16" cy="17" r="2" fill="#FF2D2D"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">VÉRTICE</title>
+  <rect width="128" height="128" fill="#000"/>
+  <text x="50%" y="58%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="900" font-size="64" letter-spacing="-2">
+    <tspan fill="#FFFFFF">VÉ</tspan>
+    <tspan fill="#FF2D2D">R</tspan>
+    <tspan fill="#FFFFFF">TICE</tspan>
+  </text>
 </svg>
