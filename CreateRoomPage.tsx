@@ -273,6 +273,14 @@ export default function CreateRoomPage() {
                 </p>
               </div>
 
+              <div className="rounded border border-white/10 bg-white/5 p-4 mb-6">
+                <div className="font-mono text-[10px] text-white/50 uppercase tracking-[0.35em] mb-2">Estado do fluxo</div>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  Depois de clicar em <span className="font-bold text-white">Confirmar Pagamento</span>, irás preencher os teus dados e a sala será criada.
+                  Se a criação da sala demorar, espera alguns segundos até a navegação para a sala de espera.
+                </p>
+              </div>
+
               <div className="flex gap-3">
                 <button onClick={() => setStep('players')} className="btn-ghost flex-1">← Voltar</button>
                 <button onClick={() => setStep('data')} className="btn-primary flex-1">Confirmar Pagamento →</button>
@@ -320,8 +328,13 @@ export default function CreateRoomPage() {
               </div>
 
               {error && <p className="mb-4 font-mono text-xs text-red text-center">{error}</p>}
+              {loading && (
+                <div className="mb-4 rounded border border-red/20 bg-red/5 p-4 text-red text-sm text-center">
+                  A sala está a ser criada. Aguarda até a navegação automática para a sala de espera.
+                </div>
+              )}
               <div className="flex gap-3">
-                <button onClick={() => setStep('payment')} className="btn-ghost flex-1">← Voltar</button>
+                <button onClick={() => setStep('payment')} className="btn-ghost flex-1" disabled={loading}>← Voltar</button>
                 <button
                   onClick={createRoom}
                   disabled={loading || !name || !gender || !whatsapp}
