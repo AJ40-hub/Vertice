@@ -56,10 +56,14 @@ export default function CreateRoomPage() {
       status: 'waiting',
     }).select().single()
 
-    if (roomErr || !room) { setLoading(false); return }
+    if (roomErr || !room) {
+      setError(`Erro ao criar sala: ${roomErr?.message || 'falha na criação da sala'}`)
+      setLoading(false)
+      return
+    }
 
     // Create host player
-    const { data: player } = await supabase.from('players').insert({
+    const { data: player, error: playerErr } = await supabase.from('players').insert({
       room_id: room.id,
       name: name.trim(),
       gender,
@@ -67,8 +71,14 @@ export default function CreateRoomPage() {
       is_host: true,
     }).select().single()
 
+    if (playerErr || !player) {
+      setError(`Erro ao criar host: ${playerErr?.message || 'falha no registo do host'}`)
+      setLoading(false)
+      return
+    }
+
     // Register payment
-    await supabase.from('payments').insert({
+    const { error: paymentErr } = await supabase.from('payments').insert({
       room_id: room.id,
       payer_name: name.trim(),
       payer_whatsapp: whatsapp.trim(),
@@ -80,8 +90,19 @@ export default function CreateRoomPage() {
       reference: `VRT-${code}`,
     })
 
+    if (paymentErr) {
+      setError(`Erro no registo de pagamento: ${paymentErr.message}`)
+      setLoading(false)
+      return
+    }
+
     // Update room with host
-    await supabase.from('rooms').update({ host_player_id: player?.id }).eq('id', room.id)
+    const { error: roomUpdateErr } = await supabase.from('rooms').update({ host_player_id: player.id }).eq('id', room.id)
+    if (roomUpdateErr) {
+      setError(`Erro ao atualizar sala: ${roomUpdateErr.message}`)
+      setLoading(false)
+      return
+    }
 
     // Save to session
     sessionStorage.setItem('vertice_room', JSON.stringify(room))
@@ -290,6 +311,7 @@ export default function CreateRoomPage() {
                 </div>
               </div>
 
+              {error && <p className="mb-4 font-mono text-xs text-red text-center">{error}</p>}
               <div className="flex gap-3">
                 <button onClick={() => setStep('payment')} className="btn-ghost flex-1">← Voltar</button>
                 <button
