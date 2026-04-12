@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import type { Room } from './supabase'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+import toast from 'react-hot-toast'
 
 export default function AdminRooms() {
   const [rooms, setRooms] = useState<Room[]>([])
+  const [confirmRoom, setConfirmRoom] = useState<Room | null>(null)
+  const [closing, setClosing] = useState<string | null>(null)
 
   useEffect(() => { loadRooms() }, [])
 
@@ -16,70 +19,173 @@ export default function AdminRooms() {
   }, [])
 
   async function loadRooms() {
-    const { data } = await supabase.from('rooms').select('*, archives(title, subtitle)').order('created_at', { ascending: false })
+    const { data } = await supabase
+      .from('rooms').select('*, archives(title, subtitle)')
+      .order('created_at', { ascending: false })
     if (data) setRooms(data as Room[])
   }
 
-  async function endGame(roomId: string) {
-    await supabase.from('rooms').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', roomId)
+  async function closeRoom(room: Room) {
+    setClosing(room.id)
+    const { error } = await supabase
+      .from('rooms')
+      .update({ status: 'finished', finished_at: new Date().toISOString() })
+      .eq('id', room.id)
+    if (!error) {
+      toast.success('Sala ' + room.code + ' encerrada.')
+      await supabase.from('notifications').insert({
+        type: 'game_finished',
+        title: 'Sala encerrada manualmente',
+        message: 'A sala ' + room.code + ' foi encerrada pelo admin.',
+        data: { room_id: room.id, room_code: room.code }
+      })
+    } else {
+      toast.error('Erro ao encerrar a sala.')
+    }
+    setClosing(null)
+    setConfirmRoom(null)
   }
 
   const statusStyle: Record<string, string> = {
     waiting: 'badge-amber', starting: 'badge-blue', playing: 'badge-green', finished: 'badge-red'
   }
   const statusLabel: Record<string, string> = {
-    waiting: 'Aguardando', starting: 'A Iniciar', playing: '● Ao Vivo', finished: 'Terminado'
+    waiting: 'Aguardando', starting: 'A Iniciar', playing: 'Ao Vivo', finished: 'Terminado'
   }
+
+  const activeRooms = rooms.filter(r => r.status !== 'finished')
+  const finishedRooms = rooms.filter(r => r.status === 'finished')
 
   return (
     <div className="p-6 max-w-6xl">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold">Salas</h1>
-          <div className="font-mono text-[10px] text-white/20 mt-1">{rooms.filter(r => r.status === 'playing').length} ao vivo agora</div>
+      <AnimatePresence>
+        {confirmRoom && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface2 border border-border p-8 max-w-sm w-full mx-4"
+            >
+              <div className="font-mono text-[9px] text-red/60 tracking-widest mb-4">CONFIRMAR AÇÃO</div>
+              <h3 className="font-display text-xl font-bold mb-2">Encerrar Sala {confirmRoom.code}?</h3>
+              <p className="font-mono text-xs text-white/40 leading-relaxed mb-8">
+                Esta ação vai encerrar a sala imediatamente. Os jogadores serão redirecionados para o ranking. Não pode ser desfeita.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmRoom(null)}
+                  className="flex-1 py-3 border border-white/10 font-mono text-xs text-white/40 hover:text-white hover:border-white/30 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => closeRoom(confirmRoom)}
+                  disabled={closing === confirmRoom.id}
+                  className="flex-1 py-3 bg-red font-mono text-xs text-white font-bold tracking-widest hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {closing === confirmRoom.id ? 'A encerrar...' : 'ENCERRAR'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="mb-8">
+        <h1 className="font-display text-3xl font-bold">Salas</h1>
+        <div className="font-mono text-[10px] text-white/20 mt-1">
+          {rooms.filter(r => r.status === 'playing').length} ao vivo · {activeRooms.length} activas · {finishedRooms.length} terminadas
         </div>
       </div>
 
-      <div className="border border-border bg-surface2 overflow-hidden">
-        <table className="admin-table">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="px-5 pb-3 pt-4">Código</th><th>Arquivo</th><th>Jogadores</th>
-              <th>Pagamento</th><th>Status</th><th>Criada em</th><th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rooms.length === 0 ? (
-              <tr><td colSpan={7} className="text-center font-mono text-[10px] text-white/15 py-12 px-5">Nenhuma sala ainda</td></tr>
-            ) : rooms.map((r, i) => {
-              const arch = r as unknown as Record<string, Record<string, string>>
-              return (
-                <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
-                  <td className="px-5">
-                    <span className="font-display text-xl font-black tracking-widest text-white">{r.code}</span>
-                  </td>
-                  <td className="text-sm">{arch.archives?.title}: {arch.archives?.subtitle}</td>
-                  <td className="font-mono text-center">{r.num_players}</td>
-                  <td>
-                    <span className={r.payment_status === 'paid' ? 'badge-green' : 'badge-amber'}>
-                      {r.payment_status === 'paid' ? 'Pago' : 'Pendente'}
-                    </span>
-                  </td>
-                  <td><span className={statusStyle[r.status]}>{statusLabel[r.status]}</span></td>
-                  <td className="font-mono text-[10px] text-white/40">{new Date(r.created_at).toLocaleDateString('pt-AO')}</td>
-                  <td>
-                    {r.status === 'playing' && (
-                      <button onClick={() => endGame(r.id)}
-                        className="font-mono text-[9px] text-red/60 hover:text-red border border-red/20 px-2 py-1 transition-all">
-                        ENCERRAR
-                      </button>
-                    )}
-                  </td>
-                </motion.tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {activeRooms.length > 0 && (
+        <div className="mb-6">
+          <div className="font-mono text-[9px] text-white/20 tracking-widest mb-3">SALAS ACTIVAS</div>
+          <div className="border border-border bg-surface2 overflow-hidden">
+            <table className="admin-table">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-5 pb-3 pt-4">Código</th>
+                  <th>Arquivo</th>
+                  <th>Jogadores</th>
+                  <th>Pagamento</th>
+                  <th>Status</th>
+                  <th>Criada em</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeRooms.map((r, i) => {
+                  const arch = r as unknown as Record<string, Record<string, string>>
+                  return (
+                    <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
+                      <td className="px-5">
+                        <span className="font-display text-xl font-black tracking-widest">{r.code}</span>
+                      </td>
+                      <td className="text-sm">{arch.archives?.title}: {arch.archives?.subtitle}</td>
+                      <td className="font-mono text-center">{r.num_players}</td>
+                      <td>
+                        <span className={r.payment_status === 'paid' ? 'badge-green' : 'badge-amber'}>
+                          {r.payment_status === 'paid' ? 'Pago' : 'Pendente'}
+                        </span>
+                      </td>
+                      <td><span className={statusStyle[r.status]}>{statusLabel[r.status]}</span></td>
+                      <td className="font-mono text-[10px] text-white/40">{new Date(r.created_at).toLocaleDateString('pt-AO')}</td>
+                      <td>
+                        <button
+                          onClick={() => setConfirmRoom(r)}
+                          disabled={closing === r.id}
+                          className="font-mono text-[9px] text-red/70 hover:text-white hover:bg-red border border-red/30 hover:border-red px-3 py-1.5 transition-all disabled:opacity-30"
+                        >
+                          {closing === r.id ? '...' : 'ENCERRAR'}
+                        </button>
+                      </td>
+                    </motion.tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="font-mono text-[9px] text-white/20 tracking-widest mb-3">HISTÓRICO</div>
+        <div className="border border-border bg-surface2 overflow-hidden">
+          <table className="admin-table">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="px-5 pb-3 pt-4">Código</th>
+                <th>Arquivo</th>
+                <th>Jogadores</th>
+                <th>Status</th>
+                <th>Criada em</th>
+                <th>Encerrada em</th>
+              </tr>
+            </thead>
+            <tbody>
+              {finishedRooms.length === 0 ? (
+                <tr><td colSpan={6} className="text-center font-mono text-[10px] text-white/15 py-8 px-5">Nenhuma sala terminada ainda</td></tr>
+              ) : finishedRooms.map((r, i) => {
+                const arch = r as unknown as Record<string, Record<string, string>>
+                return (
+                  <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }} style={{ opacity: 0.5 }}>
+                    <td className="px-5">
+                      <span className="font-display text-lg font-black tracking-widest text-white/50">{r.code}</span>
+                    </td>
+                    <td className="text-sm text-white/40">{arch.archives?.title}: {arch.archives?.subtitle}</td>
+                    <td className="font-mono text-center text-white/40">{r.num_players}</td>
+                    <td><span className="badge-red">Terminado</span></td>
+                    <td className="font-mono text-[10px] text-white/30">{new Date(r.created_at).toLocaleDateString('pt-AO')}</td>
+                    <td className="font-mono text-[10px] text-white/30">{r.finished_at ? new Date(r.finished_at).toLocaleDateString('pt-AO') : '—'}</td>
+                  </motion.tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

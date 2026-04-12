@@ -435,3 +435,82 @@ function ExpiryTimer({ expiresAt }: { expiresAt: string }) {
     </div>
   )
 }
+
+function HostCloseButton({ roomId, roomCode }: { roomId?: string; roomCode?: string }) {
+
+  const [confirm, setConfirm] = useState(false)
+
+  const [closing, setClosing] = useState(false)
+
+  async function handleClose() {
+
+    if (!roomId) return
+
+    setClosing(true)
+
+    await supabase
+
+      .from('rooms')
+
+      .update({ status: 'finished', finished_at: new Date().toISOString() })
+
+      .eq('id', roomId)
+
+    setClosing(false)
+
+    setConfirm(false)
+
+  }
+
+  if (confirm) {
+
+    return (
+
+      <div className="fixed inset-0 z-50 flex items-end bg-black/80">
+
+        <div className="w-full bg-surface border-t border-white/10 p-6">
+
+          <div className="font-mono text-[9px] text-red/60 tracking-widest mb-3">ENCERRAR SALA {roomCode}?</div>
+
+          <p className="text-white/50 text-xs leading-relaxed mb-5 font-mono">
+
+            O jogo vai terminar para todos os jogadores. O ranking será gerado automaticamente.
+
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+
+            <button onClick={() => setConfirm(false)} className="py-3 border border-white/10 font-mono text-xs text-white/40">
+
+              Cancelar
+
+            </button>
+
+            <button onClick={handleClose} disabled={closing} className="py-3 bg-red font-mono text-xs text-white font-bold tracking-widest disabled:opacity-50">
+
+              {closing ? 'A encerrar...' : 'ENCERRAR'}
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+  return (
+
+    <button onClick={() => setConfirm(true)} className="p-2 text-white/20 hover:text-red transition-colors" title="Encerrar sala">
+
+      <span className="text-sm">⏹</span>
+
+    </button>
+
+  )
+
+}
+
