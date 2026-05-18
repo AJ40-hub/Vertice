@@ -21,6 +21,7 @@ import AdminPayments from './AdminPayments'
 import AdminPrizes from './AdminPrizes'
 import AdminNotifications from './AdminNotifications'
 import AdminFinancials from './AdminFinancials'
+import AdminAssets from './AdminAssets'
 
 function ProtectedAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAdminAuth()
@@ -39,14 +40,20 @@ export default function App() {
       <Route path="/sala/:code/jogo" element={<GamePage />} />
       <Route path="/sala/:code/pos-jogo" element={<PostGamePage />} />
 
-      {/* Admin (secret route) */}
+      {/* Admin — rota secreta */}
       <Route path="/vertice-admin/login" element={<AdminLoginPage />} />
-      <Route path="/vertice-admin" element={
-        <ProtectedAdmin><AdminLayout /></ProtectedAdmin>
-      }>
+      <Route
+        path="/vertice-admin"
+        element={
+          <ProtectedAdmin>
+            <AdminLayout />
+          </ProtectedAdmin>
+        }
+      >
         <Route index element={<AdminDashboard />} />
         <Route path="salas" element={<AdminRooms />} />
         <Route path="arquivos" element={<AdminArchives />} />
+        <Route path="assets" element={<AdminAssets />} />
         <Route path="pagamentos" element={<AdminPayments />} />
         <Route path="premios" element={<AdminPrizes />} />
         <Route path="notificacoes" element={<AdminNotifications />} />
