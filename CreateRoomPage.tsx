@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { supabase } from './supabase'
 import type { Archive } from './supabase'
 
 type Step = 'archive' | 'players' | 'payment' | 'data'
@@ -22,9 +21,10 @@ export default function CreateRoomPage() {
   const [whatsapp, setWhatsapp] = useState('')
 
   useEffect(() => {
-    supabase.from('archives').select('*').eq('is_active', true).then(({ data }) => {
-      if (data) setArchives(data as Archive[])
-    })
+    fetch('/api/archives')
+      .then((response) => response.json())
+      .then((data) => setArchives((data.archives || []) as Archive[]))
+      .catch(() => setArchives([]))
   }, [])
 
   const totalAmount = selectedArchive ? selectedArchive.price_per_player * numPlayers : 0
@@ -101,7 +101,7 @@ export default function CreateRoomPage() {
                 {archives.map((a) => (
                   <div
                     key={a.id}
-                    onClick={() => setSelectedArchive(a)}
+                    onClick={() => { setSelectedArchive(a); setPaymentMode(a.payment_mode) }}
                     className={`border p-5 cursor-pointer transition-all ${selectedArchive?.id === a.id ? 'border-red bg-red/5' : 'border-white/10 hover:border-white/30'}`}
                   >
                     <div className="font-mono text-[10px] text-red/70 tracking-widest mb-1">{a.title}</div>

@@ -1,23 +1,20 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabase'
 import type { Payment } from './supabase'
 import { motion } from 'framer-motion'
+import { adminApi } from './adminApi'
 
 export function AdminPayments() {
   const [payments, setPayments] = useState<Payment[]>([])
 
-  useEffect(() => { loadPayments() }, [])
-
   useEffect(() => {
-    const channel = supabase.channel('payments_admin_live')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, () => loadPayments())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    loadPayments()
+    const interval = setInterval(loadPayments, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadPayments() {
-    const { data } = await supabase.from('payments').select('*').order('created_at', { ascending: false })
-    if (data) setPayments(data as Payment[])
+    const data = await adminApi<{ payments: Payment[] }>('payments')
+    setPayments(data.payments)
   }
 
   const total = payments.filter(p => p.status === 'confirmed').reduce((s, p) => s + p.amount, 0)

@@ -1,32 +1,23 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabase'
 import type { Payment, Prize } from './supabase'
+import { adminApi } from './adminApi'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { format, subDays } from 'date-fns'
 
 export default function AdminFinancials() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [prizes, setPrizes] = useState<Prize[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => { loadData() }, [])
 
   useEffect(() => {
-    const channel = supabase.channel('financials_admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes' }, () => loadData())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    loadData()
+    const interval = setInterval(loadData, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadData() {
-    const [{ data: p }, { data: pr }] = await Promise.all([
-      supabase.from('payments').select('*').eq('status', 'confirmed').order('created_at', { ascending: false }),
-      supabase.from('prizes').select('*').eq('status', 'delivered').order('created_at', { ascending: false }),
-    ])
-    if (p) setPayments(p as Payment[])
-    if (pr) setPrizes(pr as Prize[])
-    setLoading(false)
+    const data = await adminApi<{ payments: Payment[]; prizes: Prize[] }>('financials')
+    setPayments(data.payments)
+    setPrizes(data.prizes)
   }
 
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0)

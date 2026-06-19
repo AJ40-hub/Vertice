@@ -14,7 +14,7 @@ export default function AdminLoginPage() {
   async function handleLogin() {
     setLoading(true); setError('')
     await new Promise(r => setTimeout(r, 800))
-    const ok = login(password)
+    const ok = await login(password)
     if (ok) {
       setGlitch(true)
       setTimeout(() => navigate('/vertice-admin'), 600)

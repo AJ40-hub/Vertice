@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from './supabase'
 import { useGameStore } from './gameStore'
 import type { Player, Ranking } from './supabase'
 
 export default function PostGamePage() {
-  const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
   const { room, player, clearGame } = useGameStore()
-  const [ranking, setRanking] = useState<Ranking | null>(null)
+  const [, setRanking] = useState<Ranking | null>(null)
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [phase, setPhase] = useState<'loading' | 'postgame' | 'ranking'>('loading')
   const [isPostgameEligible, setIsPostgameEligible] = useState(false)
@@ -32,68 +30,18 @@ export default function PostGamePage() {
   }, [])
 
   async function loadRanking() {
-    if (!room) return
+    if (!room || !player) return
 
-    // Get all players sorted by score
-    const { data: players } = await supabase
-      .from('players').select('*').eq('room_id', room.id).order('score', { ascending: false })
+    const response = await fetch('/api/finish-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: room.id, player_id: player.id }),
+    })
+    const data = await response.json()
+    if (!response.ok) return
 
-    if (!players) return
-    setAllPlayers(players as Player[])
-
-    const winner = players[0] as Player
-
-    // Create/get ranking
-    const { data: existingRanking } = await supabase
-      .from('rankings').select('*').eq('room_id', room.id).single()
-
-    if (!existingRanking) {
-      const rankingData = players.map((p, i) => ({
-        id: p.id, name: p.name, role: p.role_label, score: p.score, rank: i + 1
-      }))
-
-      const { data: newRanking } = await supabase.from('rankings').insert({
-        room_id: room.id,
-        archive_title: 'Arquivo 01: Última Conexão',
-        players: rankingData,
-        winner_id: winner.id,
-      }).select().single()
-
-      if (newRanking) setRanking(newRanking as Ranking)
-
-      // Create prize
-      await supabase.from('prizes').insert({
-        room_id: room.id,
-        winner_player_id: winner.id,
-        winner_name: winner.name,
-        winner_gender: winner.gender,
-        winner_whatsapp: winner.whatsapp,
-        winner_score: winner.score,
-        amount: 1000,
-        status: 'pending',
-      })
-
-      // Admin notification: ranking ready
-      await supabase.from('notifications').insert({
-        type: 'ranking_ready',
-        title: 'Ranking disponível',
-        message: `Sala ${room.code} terminou. Vencedor: ${winner.name} (${winner.whatsapp})`,
-        data: {
-          room_id: room.id, room_code: room.code,
-          winner_name: winner.name, winner_whatsapp: winner.whatsapp,
-          winner_gender: winner.gender, winner_score: winner.score
-        },
-      })
-
-      await supabase.from('notifications').insert({
-        type: 'winner_identified',
-        title: 'Melhor jogador identificado',
-        message: `${winner.name} — ${winner.whatsapp} — Score: ${winner.score}`,
-        data: { winner_name: winner.name, winner_whatsapp: winner.whatsapp, winner_gender: winner.gender, winner_score: winner.score, room_code: room.code },
-      })
-    } else {
-      setRanking(existingRanking as Ranking)
-    }
+    setAllPlayers(data.players as Player[])
+    setRanking(data.ranking as Ranking)
 
     // Show postgame for eligible players first, then ranking
     if (player?.postgame_eligible) {

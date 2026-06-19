@@ -1,44 +1,35 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabase'
 import type { Room } from './supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { adminApi } from './adminApi'
 
 export default function AdminRooms() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [confirmRoom, setConfirmRoom] = useState<Room | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
 
-  useEffect(() => { loadRooms() }, [])
-
   useEffect(() => {
-    const channel = supabase.channel('rooms_admin_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => loadRooms())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    loadRooms()
+    const interval = setInterval(loadRooms, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadRooms() {
-    const { data } = await supabase
-      .from('rooms').select('*, archives(title, subtitle)')
-      .order('created_at', { ascending: false })
-    if (data) setRooms(data as Room[])
+    const data = await adminApi<{ rooms: Room[] }>('rooms')
+    setRooms(data.rooms)
   }
 
   async function closeRoom(room: Room) {
     setClosing(room.id)
-    const { error } = await supabase
-      .from('rooms')
-      .update({ status: 'finished', finished_at: new Date().toISOString() })
-      .eq('id', room.id)
-    if (!error) {
+    const response = await fetch('/api/finish-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ room_id: room.id }),
+    })
+    if (response.ok) {
       toast.success('Sala ' + room.code + ' encerrada.')
-      await supabase.from('notifications').insert({
-        type: 'game_finished',
-        title: 'Sala encerrada manualmente',
-        message: 'A sala ' + room.code + ' foi encerrada pelo admin.',
-        data: { room_id: room.id, room_code: room.code }
-      })
     } else {
       toast.error('Erro ao encerrar a sala.')
     }

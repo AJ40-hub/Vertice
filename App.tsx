@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useAdminAuth } from './adminAuth'
 
 // Landing
@@ -23,8 +25,21 @@ import AdminNotifications from './AdminNotifications'
 import AdminFinancials from './AdminFinancials'
 import AdminAssets from './AdminAssets'
 
-function ProtectedAdmin({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAdminAuth()
+function ProtectedAdmin({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isChecking, checkSession } = useAdminAuth()
+
+  useEffect(() => {
+    checkSession()
+  }, [checkSession])
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="font-mono text-[10px] text-white/30 tracking-[0.4em]">A VALIDAR ACESSO</div>
+      </div>
+    )
+  }
+
   if (!isAuthenticated) return <Navigate to="/vertice-admin/login" replace />
   return <>{children}</>
 }

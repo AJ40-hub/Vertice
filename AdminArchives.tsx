@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import type { Archive } from './supabase'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { adminApi, adminStorageApi } from './adminApi'
 
 type StorageFile = {
   id: string
@@ -29,12 +30,12 @@ export default function AdminArchives() {
   useEffect(() => { loadArchives() }, [])
 
   async function loadArchives() {
-    const { data } = await supabase.from('archives').select('*').order('created_at')
-    if (data) setArchives(data as Archive[])
+    const data = await adminApi<{ archives: Archive[] }>('archives')
+    setArchives(data.archives)
   }
 
   async function toggleActive(archive: Archive) {
-    await supabase.from('archives').update({ is_active: !archive.is_active }).eq('id', archive.id)
+    await adminApi('toggle-archive', { archive_id: archive.id, is_active: archive.is_active })
     toast.success(`Arquivo ${archive.is_active ? 'desativado' : 'ativado'}`)
     loadArchives()
   }
@@ -45,13 +46,8 @@ export default function AdminArchives() {
       toast.error('Preencha o slug e o título para associar o arquivo corretamente.')
       return
     }
-    if (editing.id) {
-      await supabase.from('archives').update(editing).eq('id', editing.id)
-      toast.success('Arquivo atualizado')
-    } else {
-      await supabase.from('archives').insert({ ...editing, is_active: false })
-      toast.success('Arquivo criado')
-    }
+    await adminApi('save-archive', { archive: editing })
+    toast.success(editing.id ? 'Arquivo atualizado' : 'Arquivo criado')
     setEditing(null); setShowForm(false); loadArchives()
   }
 
@@ -74,17 +70,13 @@ export default function AdminArchives() {
       return
     }
     const path = folder ? `${archive.slug}/${folder}` : archive.slug
-    const { data, error } = await supabase.storage.from(storageBucket).list(path, {
-      limit: 200,
-      offset: 0,
-      sortBy: { column: 'name', order: 'asc' }
-    })
-    if (error) {
+    try {
+      const data = await adminStorageApi<{ files: StorageFile[] }>('list', { bucket: storageBucket, path })
+      setArchiveFiles(data.files || [])
+    } catch {
       toast.error('Não foi possível carregar os ficheiros do bucket.')
       setArchiveFiles([])
-      return
     }
-    setArchiveFiles(data || [])
   }
 
   async function handleFileUpload() {
@@ -103,14 +95,15 @@ export default function AdminArchives() {
       for (const file of Array.from(selectedFiles)) {
         const folderPath = currentFolder ? `${fileManagerArchive.slug}/${currentFolder}` : fileManagerArchive.slug
         const filePath = `${folderPath}/${file.name}`
-        const { error } = await supabase.storage.from(storageBucket).upload(filePath, file, { upsert: true })
+        const signed = await adminStorageApi<{ path: string; token: string }>('signed-upload', { bucket: storageBucket, path: filePath })
+        const { error } = await supabase.storage.from(storageBucket).uploadToSignedUrl(signed.path || filePath, signed.token, file)
         if (error) throw error
       }
       toast.success('Ficheiros enviados com sucesso.')
       await loadArchiveFiles(fileManagerArchive, currentFolder)
       if (fileInputRef.current) fileInputRef.current.value = ''
       setSelectedFiles(null)
-    } catch (error) {
+    } catch {
       toast.error('Erro ao enviar ficheiros. Verifique o bucket e as permissões.')
     } finally {
       setUploadingFiles(false)
@@ -124,8 +117,9 @@ export default function AdminArchives() {
     }
     if (!fileManagerArchive || !fileManagerArchive.slug) return
     const filePath = currentFolder ? `${fileManagerArchive.slug}/${currentFolder}/${fileName}` : `${fileManagerArchive.slug}/${fileName}`
-    const { error } = await supabase.storage.from(storageBucket).remove([filePath])
-    if (error) {
+    try {
+      await adminStorageApi('remove', { bucket: storageBucket, path: filePath })
+    } catch {
       toast.error('Erro ao apagar ficheiro.')
       return
     }
@@ -133,14 +127,30 @@ export default function AdminArchives() {
     await loadArchiveFiles(fileManagerArchive, currentFolder)
   }
 
-  function getFileUrl(fileName: string) {
-    if (!storageBucket) return '#'
-    if (!fileManagerArchive || !fileManagerArchive.slug) return '#'
-    const filePath = currentFolder ? `${fileManagerArchive.slug}/${currentFolder}/${fileName}` : `${fileManagerArchive.slug}/${fileName}`
-    return supabase.storage.from(storageBucket).getPublicUrl(filePath).data.publicUrl
+  function buildArchiveFilePath(fileName: string) {
+    if (!fileManagerArchive || !fileManagerArchive.slug) return ''
+    return currentFolder ? `${fileManagerArchive.slug}/${currentFolder}/${fileName}` : `${fileManagerArchive.slug}/${fileName}`
   }
 
-  const currentPathLabel = currentFolder ? currentFolder : fileManagerArchive?.slug || ''
+  async function openArchiveFile(fileName: string) {
+    if (!storageBucket) {
+      toast.error('Defina VITE_SUPABASE_STORAGE_BUCKET no .env para gerir ficheiros do bucket.')
+      return
+    }
+    const path = buildArchiveFilePath(fileName)
+    if (!path) return
+    try {
+      const data = await adminStorageApi<{ signedUrl: string }>('signed-url', {
+        bucket: storageBucket,
+        path,
+        expires_in: 300,
+      })
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    } catch {
+      toast.error('Não foi possível abrir o ficheiro.')
+    }
+  }
+
   const folderItems = archiveFiles.reduce((acc, file) => {
     if (!fileManagerArchive?.slug) return acc
     const prefix = currentFolder ? `${fileManagerArchive.slug}/${currentFolder}/` : `${fileManagerArchive.slug}/`
@@ -343,7 +353,7 @@ export default function AdminArchives() {
                     <div className="font-mono text-[10px] text-white/40">Atualizado: {new Date(file.updated_at).toLocaleString()}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <a href={getFileUrl(file.name)} target="_blank" rel="noreferrer" className="btn-ghost text-xs">Abrir</a>
+                    <button onClick={() => openArchiveFile(file.name)} className="btn-ghost text-xs">Abrir</button>
                     <button onClick={() => handleDeleteFile(file.name)} className="btn-ghost text-xs text-red">Apagar</button>
                   </div>
                 </div>

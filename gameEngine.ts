@@ -1,4 +1,3 @@
-import { supabase } from './supabase'
 import type { Player } from './supabase'
 
 // ── ROLES ─────────────────────────────────────────────────────
@@ -141,51 +140,10 @@ export function generateRoomCode(): string {
 }
 
 // ── DELIVER EVENTS ────────────────────────────────────────────
-export async function deliverPendingEvents(roomId: string, archiveId: string, elapsedMinutes: number) {
-  const { data: events } = await supabase
-    .from('game_events')
-    .select('*')
-    .eq('room_id', roomId)
-    .eq('delivered', false)
-    .lte('trigger_minute', elapsedMinutes)
-
-  if (!events || events.length === 0) return
-
-  for (const event of events) {
-    // Mark as delivered
-    await supabase.from('game_events').update({ delivered: true, delivered_at: new Date().toISOString() }).eq('id', event.id)
-
-    // Get target players
-    const { data: players } = await supabase.from('players').select('*').eq('room_id', roomId)
-    if (!players) continue
-
-    const targetPlayers = getTargetPlayers(event.target, players)
-
-    for (const player of targetPlayers) {
-      const expiresAt = event.expires_seconds
-        ? new Date(Date.now() + event.expires_seconds * 1000).toISOString()
-        : null
-
-      await supabase.from('clues').insert({
-        room_id: roomId,
-        player_id: player.id,
-        event_id: event.id,
-        clue_type: event.event_type,
-        title: (event.content as Record<string, string>).title || 'Mensagem',
-        content: event.content,
-        expires_at: expiresAt,
-      })
-    }
-  }
-}
-
-function getTargetPlayers(target: string, players: Player[]): Player[] {
-  const postgameRoles = ['detetive', 'amigo', 'jornalista', 'testemunha']
-  if (target === 'all') return players
-  if (target === 'postgame') return players.filter(p => postgameRoles.includes(p.role || ''))
-  const roleMap: Record<string, string> = {
-    A: 'detetive', B: 'amigo', C: 'jornalista', D: 'hacker',
-    E: 'inimigo', F: 'testemunha', G: 'familiar', H: 'fa'
-  }
-  return players.filter(p => p.role === roleMap[target])
+export async function deliverPendingEvents(roomId: string, playerId: string) {
+  await fetch('/api/tick-room', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: roomId, player_id: playerId }),
+  }).catch(() => undefined)
 }

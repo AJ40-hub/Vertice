@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from './supabase'
 import { useGameStore } from './gameStore'
 import { useRoomRealtime } from './useRealtime'
-import { deliverPendingEvents, calculateScore } from './gameEngine'
+import { deliverPendingEvents } from './gameEngine'
 import type { Room, Player, Clue } from './supabase'
 
 type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'clue'
@@ -12,13 +11,16 @@ type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | '
 export default function GamePage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
-  const { room, player, clues, setRoom, setPlayer, setClues, addClue, expireClue, incrementElapsed, gameElapsedSeconds } = useGameStore()
+  const { room, player, clues, setRoom, setPlayer, expireClue, setElapsed, incrementElapsed, gameElapsedSeconds } = useGameStore()
   const [activeApp, setActiveApp] = useState<AppView>('home')
   const [selectedClue, setSelectedClue] = useState<Clue | null>(null)
   const [betrayalPrompt, setBetrayalPrompt] = useState(false)
   const [kairoMessage, setKairoMessage] = useState<string | null>(null)
   const [glitch, setGlitch] = useState(false)
   const [newClueAlert, setNewClueAlert] = useState<Clue | null>(null)
+  const finishRequestedRef = useRef(false)
+  const knownClueIdsRef = useRef<Set<string>>(new Set())
+  const cluesInitializedRef = useRef(false)
 
   useRoomRealtime(room?.id)
 
@@ -31,10 +33,9 @@ export default function GamePage() {
     const playerData = JSON.parse(p) as Player
     setRoom(roomData)
     setPlayer(playerData)
-
-    // Load existing clues
-    supabase.from('clues').select('*').eq('player_id', playerData.id).order('created_at', { ascending: false })
-      .then(({ data }) => { if (data) setClues(data as Clue[]) })
+    if (roomData.started_at) {
+      setElapsed(Math.floor((Date.now() - new Date(roomData.started_at).getTime()) / 1000))
+    }
   }, [])
 
   // Game timer
@@ -51,9 +52,7 @@ export default function GamePage() {
     if (!room || !player) return
     const elapsedMinutes = Math.floor(gameElapsedSeconds / 60)
 
-    if (room.archive_id) {
-      deliverPendingEvents(room.id, room.archive_id, elapsedMinutes)
-    }
+    deliverPendingEvents(room.id, player.id)
 
     // Betrayal prompt at 40min
     if (elapsedMinutes === 40 && !betrayalPrompt && player.betrayal_choice === null) {
@@ -68,60 +67,83 @@ export default function GamePage() {
     clues.forEach((c) => {
       if (c.expires_at && !c.expired && new Date(c.expires_at) < now) {
         expireClue(c.id)
-        supabase.from('clues').update({ expired: true }).eq('id', c.id)
+        if (room && player) {
+          fetch('/api/player-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'expire_clue', room_id: room.id, player_id: player.id, clue_id: c.id }),
+          }).catch(() => undefined)
+        }
       }
     })
   }, [gameElapsedSeconds])
 
-  // New clue notification from realtime
+  // New clue notification from secure state polling
   useEffect(() => {
     if (!player) return
-    const channel = supabase.channel(`clues:${player.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'clues', filter: `player_id=eq.${player.id}` },
-        (payload) => {
-          const clue = payload.new as Clue
-          addClue(clue)
-          setNewClueAlert(clue)
-          setGlitch(true)
-          setTimeout(() => setGlitch(false), 400)
-          setTimeout(() => setNewClueAlert(null), 4000)
+    const known = knownClueIdsRef.current
+    if (!cluesInitializedRef.current) {
+      clues.forEach((clue) => known.add(clue.id))
+      cluesInitializedRef.current = true
+      return
+    }
 
-          // Kairo appears
-          if (clue.clue_type === 'kairo_appears') {
-            setKairoMessage((clue.content as Record<string, string>).text)
-            setTimeout(() => setKairoMessage(null), 5000)
-          }
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [player?.id])
+    const fresh = clues
+      .filter((clue) => !known.has(clue.id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+    fresh.forEach((clue) => known.add(clue.id))
+    const clue = fresh.at(-1)
+    if (!clue) return
+
+    setNewClueAlert(clue)
+    setGlitch(true)
+    setTimeout(() => setGlitch(false), 400)
+    setTimeout(() => setNewClueAlert(null), 4000)
+
+    if (clue.clue_type === 'kairo_appears') {
+      setKairoMessage((clue.content as Record<string, string>).text)
+      setTimeout(() => setKairoMessage(null), 5000)
+    }
+  }, [player?.id, clues])
 
   // Room finished
   useEffect(() => {
     if (room?.status === 'finished') {
-      // Calculate final score
-      if (player) {
-        const score = calculateScore(player, gameElapsedSeconds)
-        supabase.from('players').update({ score }).eq('id', player.id)
-      }
       setTimeout(() => navigate(`/sala/${code}/pos-jogo`), 2000)
     }
   }, [room?.status])
 
+  useEffect(() => {
+    if (!room || !player || finishRequestedRef.current || room.status !== 'playing') return
+    if (gameElapsedSeconds < 90 * 60) return
+    finishRequestedRef.current = true
+    fetch('/api/finish-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: room.id, player_id: player.id }),
+    }).catch(() => {
+      finishRequestedRef.current = false
+    })
+  }, [room?.id, room?.status, player?.id, gameElapsedSeconds])
+
   async function handleBetrayal(choice: 'reveal' | 'keep') {
-    if (!player) return
-    await supabase.from('players').update({ betrayal_choice: choice, betrayal_at: new Date().toISOString() }).eq('id', player.id)
+    if (!player || !room) return
+    await fetch('/api/player-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'betrayal', room_id: room.id, player_id: player.id, choice }),
+    })
     setBetrayalPrompt(false)
   }
 
   async function openClue(clue: Clue) {
-    if (!clue.opened_at) {
-      await supabase.from('clues').update({ opened_at: new Date().toISOString() }).eq('id', clue.id)
-      // Score: clue opened
-      if (player) {
-        const details = { ...player.score_details, clues_opened: (player.score_details?.clues_opened as number || 0) + 1 }
-        await supabase.from('players').update({ score_details: details }).eq('id', player.id)
-      }
+    if (!clue.opened_at && room && player) {
+      await fetch('/api/player-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'open_clue', room_id: room.id, player_id: player.id, clue_id: clue.id }),
+      })
     }
     setSelectedClue(clue)
     setActiveApp('clue')
@@ -435,82 +457,3 @@ function ExpiryTimer({ expiresAt }: { expiresAt: string }) {
     </div>
   )
 }
-
-function HostCloseButton({ roomId, roomCode }: { roomId?: string; roomCode?: string }) {
-
-  const [confirm, setConfirm] = useState(false)
-
-  const [closing, setClosing] = useState(false)
-
-  async function handleClose() {
-
-    if (!roomId) return
-
-    setClosing(true)
-
-    await supabase
-
-      .from('rooms')
-
-      .update({ status: 'finished', finished_at: new Date().toISOString() })
-
-      .eq('id', roomId)
-
-    setClosing(false)
-
-    setConfirm(false)
-
-  }
-
-  if (confirm) {
-
-    return (
-
-      <div className="fixed inset-0 z-50 flex items-end bg-black/80">
-
-        <div className="w-full bg-surface border-t border-white/10 p-6">
-
-          <div className="font-mono text-[9px] text-red/60 tracking-widest mb-3">ENCERRAR SALA {roomCode}?</div>
-
-          <p className="text-white/50 text-xs leading-relaxed mb-5 font-mono">
-
-            O jogo vai terminar para todos os jogadores. O ranking será gerado automaticamente.
-
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-
-            <button onClick={() => setConfirm(false)} className="py-3 border border-white/10 font-mono text-xs text-white/40">
-
-              Cancelar
-
-            </button>
-
-            <button onClick={handleClose} disabled={closing} className="py-3 bg-red font-mono text-xs text-white font-bold tracking-widest disabled:opacity-50">
-
-              {closing ? 'A encerrar...' : 'ENCERRAR'}
-
-            </button>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    )
-
-  }
-
-  return (
-
-    <button onClick={() => setConfirm(true)} className="p-2 text-white/20 hover:text-red transition-colors" title="Encerrar sala">
-
-      <span className="text-sm">⏹</span>
-
-    </button>
-
-  )
-
-}
-

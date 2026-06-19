@@ -1,0 +1,10 @@
+import { createAdminLogoutCookie } from '../_adminAuth'
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  res.setHeader('Set-Cookie', createAdminLogoutCookie())
+  return res.status(200).json({ ok: true })
+}

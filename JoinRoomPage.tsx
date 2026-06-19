@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { supabase } from './supabase'
 import type { Room } from './supabase'
 
 export default function JoinRoomPage() {
@@ -22,16 +21,15 @@ export default function JoinRoomPage() {
 
   async function lookupRoom(c: string) {
     setLoading(true); setError('')
-    const { data } = await supabase.from('rooms').select('*, archives(*)').eq('code', c.toUpperCase()).single()
+    const response = await fetch('/api/lookup-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: c }),
+    })
+    const data = await response.json()
     setLoading(false)
-    if (!data) { setError('Código inválido.'); return }
-    if (data.status === 'finished') { setError('Esta sala já terminou.'); return }
-
-    // Check capacity
-    const { count } = await supabase.from('players').select('*', { count: 'exact', head: true }).eq('room_id', data.id)
-    if ((count || 0) >= data.num_players) { setError('Esta sala está cheia.'); return }
-
-    setRoom(data as Room)
+    if (!response.ok || !data?.room) { setError(data?.error || 'Código inválido.'); return }
+    setRoom(data.room as Room)
     setStep('data')
   }
 
@@ -39,20 +37,23 @@ export default function JoinRoomPage() {
     if (!room || !name || !gender || !whatsapp) return
     setLoading(true); setError('')
 
-    const { data: player, error: err } = await supabase.from('players').insert({
-      room_id: room.id,
-      name: name.trim(),
-      gender,
-      whatsapp: whatsapp.trim(),
-      is_host: false,
-    }).select().single()
+    const response = await fetch('/api/join-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: room.code, name, gender, whatsapp }),
+    })
+    const data = await response.json()
 
-    if (err || !player) { setError('Erro ao entrar. Tenta novamente.'); setLoading(false); return }
+    if (!response.ok || !data?.player || !data?.room) {
+      setError(data?.error || 'Erro ao entrar. Tenta novamente.')
+      setLoading(false)
+      return
+    }
 
-    sessionStorage.setItem('vertice_room', JSON.stringify(room))
-    sessionStorage.setItem('vertice_player', JSON.stringify(player))
+    sessionStorage.setItem('vertice_room', JSON.stringify(data.room))
+    sessionStorage.setItem('vertice_player', JSON.stringify(data.player))
     setLoading(false)
-    navigate(`/sala/${room.code}/espera`)
+    navigate(`/sala/${data.room.code}/espera`)
   }
 
   return (

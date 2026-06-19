@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from './supabase'
-import { usePlayersRealtime } from './useRealtime'
-import { assignRoles } from './gameEngine'
 import type { Room, Player } from './supabase'
 
 export default function WaitingRoomPage() {
@@ -25,14 +22,41 @@ export default function WaitingRoomPage() {
     setCurrentPlayer(JSON.parse(p))
   }, [])
 
-  usePlayersRealtime(room?.id, (updated) => {
-    setPlayers(updated)
+  useEffect(() => {
+    if (!room?.id || !currentPlayer?.id) return
+    let cancelled = false
 
-    // Check if full
-    if (room && updated.length >= room.num_players && !countdownStartedRef.current) {
-      startCountdown(room, updated)
+    async function refreshState() {
+      const response = await fetch('/api/player-state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: room?.id, player_id: currentPlayer?.id }),
+      })
+      if (!response.ok || cancelled) return
+      const data = await response.json() as { room: Room; player: Player; players: Player[] }
+      setRoom(data.room)
+      setPlayers(data.players)
+      setCurrentPlayer(data.player)
+      sessionStorage.setItem('vertice_room', JSON.stringify(data.room))
+      sessionStorage.setItem('vertice_player', JSON.stringify(data.player))
+
+      if (data.room.status === 'playing') {
+        navigate(`/sala/${code}/jogo`)
+        return
+      }
+
+      if (data.room.status === 'waiting' && data.players.length >= data.room.num_players && !countdownStartedRef.current) {
+        startCountdown(data.room)
+      }
     }
-  })
+
+    refreshState()
+    const interval = window.setInterval(refreshState, 2500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [room?.id, currentPlayer?.id, code, navigate])
 
   // Clear countdown interval if user leaves
   useEffect(() => {
@@ -43,36 +67,9 @@ export default function WaitingRoomPage() {
     }
   }, [])
 
-  // Watch room status changes
-  useEffect(() => {
-    if (!room?.id) return
-    const channel = supabase.channel(`room_status:${room.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
-        (payload) => {
-          const updated = payload.new as Room
-          setRoom(updated)
-          if (updated.status === 'playing') {
-            navigate(`/sala/${code}/jogo`)
-          }
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [room?.id])
-
-  async function startCountdown(r: Room, allPlayers: Player[]) {
+  async function startCountdown(r: Room) {
     countdownStartedRef.current = true
     setCountdown(10)
-
-    // Assign roles
-    const roles = assignRoles(r.num_players)
-    for (let i = 0; i < allPlayers.length; i++) {
-      const role = roles[i]
-      await supabase.from('players').update({
-        role: role.key,
-        role_label: role.label,
-        postgame_eligible: role.postgame,
-      }).eq('id', allPlayers[i].id)
-    }
 
     // Countdown
     let t = 10
@@ -95,8 +92,12 @@ export default function WaitingRoomPage() {
       }
       setGlitch(true)
       window.setTimeout(() => setGlitch(false), 400)
-      window.setTimeout(() => {
-        supabase.from('rooms').update({ status: 'playing', started_at: new Date().toISOString() }).eq('id', r.id)
+      window.setTimeout(async () => {
+        await fetch('/api/start-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room_id: r.id, player_id: currentPlayer?.id }),
+        })
       }, 900)
     }, 1000)
   }

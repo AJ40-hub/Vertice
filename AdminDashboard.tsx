@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { supabase } from './supabase'
-import { format, subDays, startOfDay } from 'date-fns'
-import { pt } from 'date-fns/locale'
+import { adminApi } from './adminApi'
 
 interface Stats {
   totalRevenue: number; totalRooms: number; totalPlayers: number
@@ -15,7 +13,6 @@ export default function AdminDashboard() {
   const [revenueData, setRevenueData] = useState<{ date: string; receita: number; jogos: number }[]>([])
   const [weekdayData, setWeekdayData] = useState<{ dia: string; acessos: number }[]>([])
   const [topGames, setTopGames] = useState<{ title: string; plays: number }[]>([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadDashboard()
@@ -23,70 +20,18 @@ export default function AdminDashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // Realtime for active sessions
-  useEffect(() => {
-    const channel = supabase.channel('dashboard_rooms')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => loadDashboard())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [])
-
   async function loadDashboard() {
-    const [
-      { data: payments },
-      { count: totalRooms },
-      { count: totalPlayers },
-      { count: activeSessions },
-      { count: pendingPrizes },
-      { data: prizes },
-      { data: rooms },
-    ] = await Promise.all([
-      supabase.from('payments').select('amount, created_at').eq('status', 'confirmed'),
-      supabase.from('rooms').select('*', { count: 'exact', head: true }),
-      supabase.from('players').select('*', { count: 'exact', head: true }),
-      supabase.from('rooms').select('*', { count: 'exact', head: true }).eq('status', 'playing'),
-      supabase.from('prizes').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('prizes').select('amount').eq('status', 'delivered'),
-      supabase.from('rooms').select('created_at, archive_id, archives(title, subtitle)').eq('status', 'finished'),
-    ])
+    const data = await adminApi<{
+      stats: Stats
+      revenueData: { date: string; receita: number; jogos: number }[]
+      weekdayData: { dia: string; acessos: number }[]
+      topGames: { title: string; plays: number }[]
+    }>('dashboard')
 
-    const totalRevenue = payments?.reduce((sum, p) => sum + p.amount, 0) || 0
-    const totalPrizeCost = prizes?.reduce((sum, p) => sum + p.amount, 0) || 0
-
-    setStats({ totalRevenue, totalRooms: totalRooms || 0, totalPlayers: totalPlayers || 0, activeSessions: activeSessions || 0, pendingPrizes: pendingPrizes || 0, totalPrizeCost })
-
-    // Revenue last 14 days
-    const days = Array.from({ length: 14 }, (_, i) => {
-      const d = subDays(new Date(), 13 - i)
-      return { date: format(d, 'dd/MM'), full: startOfDay(d).toISOString() }
-    })
-
-    const revData = days.map(({ date, full }) => {
-      const dayPayments = payments?.filter(p => p.created_at.startsWith(full.slice(0, 10))) || []
-      const dayRooms = rooms?.filter(r => r.created_at.startsWith(full.slice(0, 10))) || []
-      return { date, receita: dayPayments.reduce((s, p) => s + p.amount, 0), jogos: dayRooms.length }
-    })
-    setRevenueData(revData)
-
-    // Weekday access
-    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-    const wdData = weekdays.map((dia, i) => ({
-      dia,
-      acessos: rooms?.filter(r => new Date(r.created_at).getDay() === i).length || 0
-    }))
-    setWeekdayData(wdData)
-
-    // Top games
-    const gameCount: Record<string, { title: string; plays: number }> = {}
-    rooms?.forEach(r => {
-      const arch = r.archives as Record<string, string>
-      if (arch) {
-        const key = arch.title
-        gameCount[key] = { title: `${arch.title}: ${arch.subtitle}`, plays: (gameCount[key]?.plays || 0) + 1 }
-      }
-    })
-    setTopGames(Object.values(gameCount).sort((a, b) => b.plays - a.plays))
-    setLoading(false)
+    setStats(data.stats)
+    setRevenueData(data.revenueData)
+    setWeekdayData(data.weekdayData)
+    setTopGames(data.topGames)
   }
 
   const kpis = [

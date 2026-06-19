@@ -1,34 +1,30 @@
 // AdminPrizes.tsx
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { supabase } from './supabase'
 import type { Prize } from './supabase'
 import toast from 'react-hot-toast'
+import { adminApi } from './adminApi'
 
 export default function AdminPrizes() {
   const [prizes, setPrizes] = useState<Prize[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => { loadPrizes() }, [])
 
   useEffect(() => {
-    const channel = supabase.channel('prizes_admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes' }, () => loadPrizes())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    loadPrizes()
+    const interval = setInterval(loadPrizes, 10000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadPrizes() {
-    const { data } = await supabase.from('prizes').select('*').order('created_at', { ascending: false })
-    if (data) setPrizes(data as Prize[])
-    setLoading(false)
+    const data = await adminApi<{ prizes: Prize[] }>('prizes')
+    setPrizes(data.prizes)
   }
 
   async function deliverPrize(prize: Prize) {
-    const { error } = await supabase.from('prizes').update({ status: 'delivered', delivered_at: new Date().toISOString() }).eq('id', prize.id)
-    if (!error) {
-      toast.success(`Prémio marcado como entregue a ${prize.winner_name}`)
+    try {
+      await adminApi<{ prize: Prize }>('deliver-prize', { prize_id: prize.id })
+      toast.success('Prémio marcado como entregue a ' + prize.winner_name)
       loadPrizes()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao entregar prémio.')
     }
   }
 

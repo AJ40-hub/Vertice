@@ -1,34 +1,30 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './supabase'
 import type { Notification } from './supabase'
 import { motion } from 'framer-motion'
+import { adminApi } from './adminApi'
 
 export default function AdminNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState<string>('all')
 
-  useEffect(() => { loadNotifications() }, [])
-
   useEffect(() => {
-    const channel = supabase.channel('notifs_admin')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
-        (payload) => setNotifications(n => [payload.new as Notification, ...n]))
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    loadNotifications()
+    const interval = setInterval(loadNotifications, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   async function loadNotifications() {
-    const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
-    if (data) setNotifications(data as Notification[])
+    const data = await adminApi<{ notifications: Notification[] }>('notifications')
+    setNotifications(data.notifications)
   }
 
   async function markAllRead() {
-    await supabase.from('notifications').update({ read: true }).eq('read', false)
+    await adminApi('mark-all-notifications-read')
     setNotifications(n => n.map(x => ({ ...x, read: true })))
   }
 
   async function markRead(id: string) {
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    await adminApi('mark-notification-read', { notification_id: id })
     setNotifications(n => n.map(x => x.id === id ? { ...x, read: true } : x))
   }
 

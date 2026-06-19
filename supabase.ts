@@ -8,8 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: { params: { eventsPerSecond: 10 } },
-  auth: { persistSession: true, autoRefreshToken: true }
+  auth: { persistSession: false, autoRefreshToken: false }
 })
 
 export type Database = {

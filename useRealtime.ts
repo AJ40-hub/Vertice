@@ -1,87 +1,95 @@
-import { useEffect, useCallback } from 'react'
-import { supabase } from './supabase'
+import { useEffect, useCallback, useRef } from 'react'
 import { useGameStore } from './gameStore'
-import type { Room, Player, Clue } from './supabase'
+import { adminApi } from './adminApi'
+import type { Room, Player, Clue, Notification } from './supabase'
+
+async function fetchPlayerState(roomId: string, playerId: string) {
+  const response = await fetch('/api/player-state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: roomId, player_id: playerId }),
+  })
+  if (!response.ok) return null
+  return response.json() as Promise<{ room: Room; player: Player; players: Player[]; clues: Clue[] }>
+}
 
 export function useRoomRealtime(roomId: string | undefined) {
-  const { setRoom, setPlayer, addClue, player } = useGameStore()
+  const { setRoom, setPlayer, setClues, player } = useGameStore()
 
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId || !player?.id) return
+    const activeRoomId = roomId
+    const activePlayerId = player.id
+    let cancelled = false
 
-    const channel = supabase
-      .channel(`room:${roomId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}`
-      }, (payload) => {
-        if (payload.new) setRoom(payload.new as Room)
-      })
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'clues',
-        filter: `room_id=eq.${roomId}`
-      }, (payload) => {
-        const clue = payload.new as Clue
-        // Only add if it belongs to current player
-        if (!player || clue.player_id === player.id) {
-          addClue(clue)
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'players',
-        filter: `room_id=eq.${roomId}`
-      }, (payload) => {
-        if (player && payload.new.id === player.id) {
-          setPlayer(payload.new as Player)
-        }
-      })
-      .subscribe()
+    async function refresh() {
+      const state = await fetchPlayerState(activeRoomId, activePlayerId)
+      if (!state || cancelled) return
+      setRoom(state.room)
+      setPlayer(state.player)
+      setClues(state.clues)
+    }
 
-    return () => { supabase.removeChannel(channel) }
-  }, [roomId, player?.id])
+    refresh()
+    const interval = window.setInterval(refresh, 2500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [roomId, player?.id, setRoom, setPlayer, setClues])
 }
 
 export function useAdminRealtime(onNotification: (n: unknown) => void) {
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin:realtime')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'notifications'
-      }, (payload) => onNotification(payload.new))
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'payments'
-      }, (payload) => onNotification({ type: 'payment_received', data: payload.new }))
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'rooms'
-      }, (payload) => {
-        if (payload.new.status === 'finished') {
-          onNotification({ type: 'game_finished', data: payload.new })
-        }
-      })
-      .subscribe()
+  const seenIdsRef = useRef<Set<string>>(new Set())
+  const initializedRef = useRef(false)
 
-    return () => { supabase.removeChannel(channel) }
+  useEffect(() => {
+    let cancelled = false
+
+    async function refresh() {
+      try {
+        const data = await adminApi<{ notifications: Notification[] }>('notifications')
+        if (cancelled) return
+
+        const latest = data.notifications || []
+        const seen = seenIdsRef.current
+        const fresh = latest.filter((notification) => !seen.has(notification.id)).reverse()
+        latest.forEach((notification) => seen.add(notification.id))
+        if (initializedRef.current) {
+          fresh.forEach(onNotification)
+        } else {
+          initializedRef.current = true
+        }
+      } catch {
+        // Admin polling should never crash the shell; expired sessions are handled by route guards.
+      }
+    }
+
+    refresh()
+    const interval = window.setInterval(refresh, 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
   }, [onNotification])
 }
 
 export function usePlayersRealtime(roomId: string | undefined, onUpdate: (players: Player[]) => void) {
+  const player = useGameStore((state) => state.player)
+
   const fetchPlayers = useCallback(async () => {
-    if (!roomId) return
-    const { data } = await supabase
-      .from('players').select('*').eq('room_id', roomId).order('joined_at')
-    if (data) onUpdate(data as Player[])
-  }, [roomId])
+    if (!roomId || !player?.id) return
+    const activeRoomId = roomId
+    const activePlayerId = player.id
+    const state = await fetchPlayerState(activeRoomId, activePlayerId)
+    if (state) onUpdate(state.players)
+  }, [roomId, player?.id, onUpdate])
 
   useEffect(() => {
     fetchPlayers()
-    if (!roomId) return
+    if (!roomId || !player?.id) return
 
-    const channel = supabase
-      .channel(`players:${roomId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${roomId}`
-      }, () => fetchPlayers())
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [roomId, fetchPlayers])
+    const interval = window.setInterval(fetchPlayers, 2500)
+    return () => window.clearInterval(interval)
+  }, [roomId, player?.id, fetchPlayers])
 }

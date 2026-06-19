@@ -12,6 +12,7 @@ interface GameState {
   setClues: (clues: Clue[]) => void
   addClue: (clue: Clue) => void
   expireClue: (clueId: string) => void
+  setElapsed: (seconds: number) => void
   incrementElapsed: () => void
   clearGame: () => void
 }
@@ -31,6 +32,7 @@ export const useGameStore = create<GameState>()(
       expireClue: (clueId) => set((s) => ({
         clues: s.clues.map((c) => c.id === clueId ? { ...c, expired: true } : c)
       })),
+      setElapsed: (seconds) => set({ gameElapsedSeconds: Math.max(0, seconds) }),
       incrementElapsed: () => set((s) => ({ gameElapsedSeconds: s.gameElapsedSeconds + 1 })),
       clearGame: () => set({ room: null, player: null, clues: [], gameElapsedSeconds: 0 }),
     }),

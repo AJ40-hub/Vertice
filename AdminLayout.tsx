@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAdminAuth } from './adminAuth'
 import { useAdminRealtime } from './useRealtime'
-import { supabase } from './supabase'
+import { adminApi } from './adminApi'
 
 export default function AdminLayout() {
   const navigate = useNavigate()
@@ -22,14 +22,10 @@ export default function AdminLayout() {
   }, [])
 
   async function fetchCounts() {
-    const [{ count: unread }, { count: prizes }, { count: playing }] = await Promise.all([
-      supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('read', false),
-      supabase.from('prizes').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('rooms').select('*', { count: 'exact', head: true }).eq('status', 'playing'),
-    ])
-    setUnreadCount(unread || 0)
-    setPendingPrizes(prizes || 0)
-    setLiveUsers(playing || 0)
+    const data = await adminApi<{ unread: number; pendingPrizes: number; liveRooms: number }>('layout-summary')
+    setUnreadCount(data.unread)
+    setPendingPrizes(data.pendingPrizes)
+    setLiveUsers(data.liveRooms)
   }
 
   const handleRealtime = useCallback((notification: unknown) => {

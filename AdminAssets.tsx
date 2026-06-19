@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
+import { adminApi, adminStorageApi } from './adminApi'
 
 interface Archive { id: string; title: string; subtitle: string }
 interface Asset {
@@ -30,6 +31,15 @@ const PLAYERS = [
   { key: 'postgame', label: 'Pós-jogo (A, B, C, F)' },
 ]
 
+const STORAGE_BUCKET = 'vertice-assets'
+
+function storagePathFromAsset(asset: Asset) {
+  const raw = asset.file_url || asset.file_name || ''
+  const marker = `/${STORAGE_BUCKET}/`
+  if (raw.includes(marker)) return decodeURIComponent(raw.split(marker)[1].split('?')[0])
+  return raw.startsWith('http') ? '' : raw
+}
+
 export default function AdminAssets() {
   const [archives, setArchives] = useState<Archive[]>([])
   const [selectedArchive, setSelectedArchive] = useState<string>('')
@@ -49,12 +59,12 @@ export default function AdminAssets() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   useEffect(() => {
-    supabase.from('archives').select('id, title, subtitle').then(({ data }) => {
-      if (data) {
-        setArchives(data as Archive[])
-        if (data.length > 0) setSelectedArchive(data[0].id)
-      }
-    })
+    adminApi<{ archives: Archive[] }>('asset-bootstrap')
+      .then((data) => {
+        setArchives(data.archives)
+        if (data.archives.length > 0) setSelectedArchive(data.archives[0].id)
+      })
+      .catch(() => setArchives([]))
   }, [])
 
   useEffect(() => {
@@ -62,10 +72,8 @@ export default function AdminAssets() {
   }, [selectedArchive])
 
   async function loadAssets() {
-    const { data } = await supabase.from('assets')
-      .select('*').eq('archive_id', selectedArchive)
-      .order('trigger_minute', { ascending: true, nullsFirst: false })
-    if (data) setAssets(data as Asset[])
+    const data = await adminApi<{ assets: Asset[] }>('assets', { archive_id: selectedArchive })
+    setAssets(data.assets)
   }
 
   function formatSize(bytes: number) {
@@ -85,9 +93,10 @@ export default function AdminAssets() {
     const ext = selectedFile.name.split('.').pop()
     const fileName = `${selectedArchive}/${form.file_type}/${Date.now()}_${form.name.replace(/\s+/g, '_')}.${ext}`
 
+    const signed = await adminStorageApi<{ path: string; token: string }>('signed-upload', { bucket: STORAGE_BUCKET, path: fileName })
     const { error: upErr } = await supabase.storage
-      .from('vertice-assets')
-      .upload(fileName, selectedFile, { cacheControl: '3600', upsert: false })
+      .from(STORAGE_BUCKET)
+      .uploadToSignedUrl(signed.path || fileName, signed.token, selectedFile)
 
     if (upErr) {
       toast.error('Erro no upload: ' + upErr.message)
@@ -98,35 +107,31 @@ export default function AdminAssets() {
 
     setUploadProgress(70)
 
-    const { data: urlData } = supabase.storage
-      .from('vertice-assets')
-      .getPublicUrl(fileName)
-
-    const { error: dbErr } = await supabase.from('assets').insert({
-      archive_id: selectedArchive,
-      name: form.name,
-      description: form.description || null,
-      file_type: form.file_type,
-      file_name: selectedFile.name,
-      file_url: urlData.publicUrl,
-      file_size: selectedFile.size,
-      target_player: form.target_player,
-      trigger_minute: form.trigger_minute ? parseInt(form.trigger_minute) : null,
-      trigger_second: parseInt(form.trigger_second) || 0,
-      expires_seconds: form.expires_seconds ? parseInt(form.expires_seconds) : null,
-      is_postgame: form.is_postgame,
-    })
-
-    setUploadProgress(100)
-
-    if (dbErr) {
-      toast.error('Erro ao guardar: ' + dbErr.message)
-    } else {
+    try {
+      await adminApi('create-asset', {
+        asset: {
+          archive_id: selectedArchive,
+          name: form.name,
+          description: form.description || null,
+          file_type: form.file_type,
+          file_name: selectedFile.name,
+          file_url: fileName,
+          file_size: selectedFile.size,
+          target_player: form.target_player,
+          trigger_minute: form.trigger_minute ? parseInt(form.trigger_minute) : null,
+          trigger_second: parseInt(form.trigger_second) || 0,
+          expires_seconds: form.expires_seconds ? parseInt(form.expires_seconds) : null,
+          is_postgame: form.is_postgame,
+        }
+      })
+      setUploadProgress(100)
       toast.success('Asset adicionado com sucesso!')
       setShowForm(false)
       setSelectedFile(null)
       setForm({ name: '', description: '', file_type: 'pdf', target_player: 'all', trigger_minute: '', trigger_second: '0', expires_seconds: '', is_postgame: false })
       loadAssets()
+    } catch (error) {
+      toast.error('Erro ao guardar: ' + (error instanceof Error ? error.message : 'pedido recusado'))
     }
 
     setUploading(false)
@@ -134,14 +139,32 @@ export default function AdminAssets() {
   }
 
   async function deleteAsset(asset: Asset) {
-    const parts = asset.file_url.split('/vertice-assets/')
-    if (parts[1]) {
-      await supabase.storage.from('vertice-assets').remove([parts[1]])
+    const path = storagePathFromAsset(asset)
+    if (path) {
+      await adminStorageApi('remove', { bucket: STORAGE_BUCKET, path })
     }
-    await supabase.from('assets').delete().eq('id', asset.id)
+    await adminApi('delete-asset', { asset_id: asset.id })
     toast.success('Asset eliminado.')
     setDeleteId(null)
     loadAssets()
+  }
+
+  async function openAsset(asset: Asset) {
+    const path = storagePathFromAsset(asset)
+    if (!path) {
+      toast.error('Não foi possível localizar o ficheiro no storage.')
+      return
+    }
+    try {
+      const data = await adminStorageApi<{ signedUrl: string }>('signed-url', {
+        bucket: STORAGE_BUCKET,
+        path,
+        expires_in: 300,
+      })
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    } catch {
+      toast.error('Não foi possível abrir o ficheiro.')
+    }
   }
 
   const filtered = filterType === 'all' ? assets : assets.filter(a => a.file_type === filterType)
@@ -377,10 +400,10 @@ export default function AdminAssets() {
                 <td className="font-mono text-xs text-white/40">{formatSize(a.file_size)}</td>
                 <td>
                   <div className="flex gap-2">
-                    <a href={a.file_url} target="_blank" rel="noreferrer"
+                    <button onClick={() => openAsset(a)}
                       className="font-mono text-[9px] text-blue/60 hover:text-blue border border-blue/20 px-2 py-1 transition-all">
                       VER
-                    </a>
+                    </button>
                     <button onClick={() => setDeleteId(a.id)}
                       className="font-mono text-[9px] text-red/60 hover:text-red border border-red/20 px-2 py-1 transition-all">
                       ✕
