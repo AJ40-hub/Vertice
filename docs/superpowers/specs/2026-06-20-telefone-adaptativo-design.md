@@ -8,11 +8,15 @@ Depois da sala de espera completar o numero de jogadores e o jogo iniciar, cada 
 
 O telefone sera adaptativo por dispositivo.
 
-- Jogadores em iOS recebem o modelo visual iOS premium, baseado na primeira versao aprovada da opcao A: moldura muito arredondada, ilha superior, status bar, wallpaper escuro, grelha de apps, dock translucido e notificacao flutuante.
-- Jogadores em Android recebem o modelo visual Android/Samsung, baseado na opcao B: moldura menos arredondada, camera central em furo, status bar Android, card de notificacao e grelha de apps.
+- Jogadores em iOS recebem o modelo visual iOS premium, baseado na primeira versão aprovada da opção A: moldura muito arredondada, ilha superior, status bar, wallpaper escuro, grelha de apps, dock translúcido e notificação flutuante.
+- Jogadores em Android recebem o modelo visual Android/Samsung, baseado na opção B: moldura menos arredondada, câmara central em furo, status bar Android, card de notificação e grelha de apps.
 - Desktop, tablets incertos ou navegadores onde a deteccao seja inconclusiva recebem o modelo iOS premium como fallback.
 
 Os modelos devem ser inspirados em padroes conhecidos, mas sem usar nomes, logotipos ou assets oficiais de iPhone, iOS, Samsung ou Android.
+
+Todo o texto visível no telefone deve estar em português correto e acentuado. A marca deve aparecer como `VÉRTICE`.
+
+As notificações não podem tapar ícones, cards ou texto importante. No ecrã inicial, elas devem ocupar uma zona reservada abaixo do cabeçalho ou empurrar a grelha de apps para baixo. Dentro do WhatsApp fictício, a nova mensagem entra na conversa, não por cima da conversa.
 
 ## Estrutura do Telefone
 
