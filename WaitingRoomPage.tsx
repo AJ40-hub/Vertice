@@ -10,6 +10,7 @@ export default function WaitingRoomPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [roomClosed, setRoomClosed] = useState(false)
   const [glitch, setGlitch] = useState(false)
   const countdownStartedRef = useRef(false)
   const countdownIntervalRef = useRef<number | null>(null)
@@ -42,6 +43,16 @@ export default function WaitingRoomPage() {
 
       if (data.room.status === 'playing') {
         navigate(`/sala/${code}/jogo`)
+        return
+      }
+
+      if (data.room.status === 'finished') {
+        if (countdownIntervalRef.current !== null) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
+        }
+        setCountdown(null)
+        setRoomClosed(true)
         return
       }
 
@@ -105,6 +116,30 @@ export default function WaitingRoomPage() {
   const filled = players.length
   const total = room?.num_players || 6
   const pct = (filled / total) * 100
+
+  if (roomClosed) {
+    return (
+      <div className="min-h-screen bg-black grain scanlines flex items-center justify-center px-6 text-center">
+        <div className="w-full max-w-md border border-red/20 bg-red/5 p-8">
+          <div className="font-mono text-[10px] text-red/60 tracking-[0.35em] mb-4">SALA ENCERRADA</div>
+          <h1 className="font-display text-3xl font-black mb-3">Ligação terminada</h1>
+          <p className="font-mono text-xs text-white/40 leading-relaxed mb-8">
+            Esta sala foi encerrada pelo administrador antes do início do jogo.
+          </p>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('vertice_room')
+              sessionStorage.removeItem('vertice_player')
+              navigate('/')
+            }}
+            className="btn-ghost w-full"
+          >
+            Voltar ao início
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-black grain scanlines flex flex-col items-center justify-center px-6 relative overflow-hidden">

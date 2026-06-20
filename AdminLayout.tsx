@@ -37,6 +37,7 @@ export default function AdminLayout() {
       ranking_ready:      { title: '🏆 Ranking Pronto',    message: n.message || 'Ranking disponível' },
       winner_identified:  { title: '🥇 Vencedor',          message: n.message || 'Vencedor identificado' },
       payment_received:   { title: '💰 Pagamento',         message: 'Novo pagamento recebido' },
+      prize_delivered:    { title: '◆ Prémio Entregue',    message: n.message || 'Prémio marcado como entregue' },
     }
     const toast = toastMap[n.type]
     if (toast) {

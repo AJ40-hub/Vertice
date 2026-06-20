@@ -167,11 +167,46 @@
     @apply bg-surface2 border border-border p-6;
   }
 
-  /* Admin table */
-  .admin-table { @apply w-full border-collapse; }
-  .admin-table th { @apply text-left text-xs font-mono tracking-widest uppercase text-white/30 pb-3 border-b border-border; }
-  .admin-table td { @apply py-4 border-b border-border/50 text-sm text-white/70; }
-  .admin-table tr:hover td { @apply bg-white/[0.02] text-white; }
+  /* Admin tables */
+  .admin-panel {
+    @apply border border-border bg-surface2;
+  }
+
+  .admin-panel-pad {
+    @apply border border-border bg-surface2 p-5;
+  }
+
+  .admin-table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+
+  .admin-section-title {
+    @apply font-mono text-[10px] uppercase tracking-widest text-white/30;
+  }
+
+  .admin-empty {
+    @apply py-10 text-center font-mono text-[10px] text-white/15;
+  }
+
+  .admin-table {
+    @apply w-full min-w-[720px] border-collapse;
+  }
+
+  .admin-table th {
+    @apply whitespace-nowrap border-b border-border px-4 pb-3 pt-4 text-left align-middle font-mono text-[10px] uppercase tracking-widest text-white/30;
+  }
+
+  .admin-table td {
+    @apply border-b border-border/50 px-4 py-4 align-middle text-sm text-white/70;
+  }
+
+  .admin-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .admin-table tr:hover td {
+    @apply bg-white/[0.02] text-white;
+  }
 
   /* Status badges */
   .badge-green { @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-green-dim text-green border border-green/20; }

@@ -23,6 +23,31 @@ function publicPlayer(player: any) {
   }
 }
 
+async function ensureFinishNotification(supabase: any, room: any, archive: { title?: string; subtitle?: string } | null, manualBeforeStart: boolean) {
+  const { data: existingFinishNotification } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('type', 'game_finished')
+    .eq('data->>room_id', room.id)
+    .maybeSingle()
+
+  if (existingFinishNotification) return
+
+  await supabase.from('notifications').insert({
+    type: 'game_finished',
+    title: manualBeforeStart ? 'Sala encerrada manualmente' : 'Jogo terminado',
+    message: manualBeforeStart
+      ? `Sala ${room.code} foi encerrada antes do início do jogo.`
+      : `Sala ${room.code} — ${archive?.title || 'Arquivo'}: ${archive?.subtitle || ''} terminou.`,
+    data: {
+      room_id: room.id,
+      room_code: room.code,
+      status_before_finish: room.status,
+      ranking_generated: !manualBeforeStart,
+    },
+  })
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -73,6 +98,18 @@ export default async function handler(req: any, res: any) {
     const finalElapsedSeconds = elapsedSecondsForRoom(finishedRoom)
     const { data: players } = await supabase.from('players').select('*').eq('room_id', roomId)
     if (!players || players.length === 0) return res.status(404).json({ error: 'No players found' })
+
+    const shouldGenerateRanking = room.status === 'playing' || (room.status === 'finished' && Boolean(room.started_at))
+    await ensureFinishNotification(supabase, finishedRoom, archive, !shouldGenerateRanking)
+
+    if (!shouldGenerateRanking) {
+      return res.status(200).json({
+        room: finishedRoom,
+        ranking: null,
+        players: players.map(publicPlayer),
+        ranking_generated: false,
+      })
+    }
 
     const scoredPlayers = await Promise.all(players.map(async (player) => {
       const score = calculateScore(player, finalElapsedSeconds)

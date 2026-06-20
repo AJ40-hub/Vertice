@@ -46,9 +46,10 @@ export default function AdminRooms() {
 
   const activeRooms = rooms.filter(r => r.status !== 'finished')
   const finishedRooms = rooms.filter(r => r.status === 'finished')
+  const closingBeforeStart = confirmRoom?.status === 'waiting' || confirmRoom?.status === 'starting'
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 max-w-7xl">
       <AnimatePresence>
         {confirmRoom && (
           <motion.div
@@ -62,7 +63,9 @@ export default function AdminRooms() {
               <div className="font-mono text-[9px] text-red/60 tracking-widest mb-4">CONFIRMAR AÇÃO</div>
               <h3 className="font-display text-xl font-bold mb-2">Encerrar Sala {confirmRoom.code}?</h3>
               <p className="font-mono text-xs text-white/40 leading-relaxed mb-8">
-                Esta ação vai encerrar a sala imediatamente. Os jogadores serão redirecionados para o ranking. Não pode ser desfeita.
+                {closingBeforeStart
+                  ? 'Esta ação vai encerrar a sala imediatamente. Como o jogo ainda não começou, não será gerado ranking, vencedor ou prémio.'
+                  : 'Esta ação vai encerrar a sala imediatamente. Os jogadores serão redirecionados para o ranking. Não pode ser desfeita.'}
               </p>
               <div className="flex gap-3">
                 <button
@@ -94,17 +97,17 @@ export default function AdminRooms() {
       {activeRooms.length > 0 && (
         <div className="mb-6">
           <div className="font-mono text-[9px] text-white/20 tracking-widest mb-3">SALAS ACTIVAS</div>
-          <div className="border border-border bg-surface2 overflow-hidden">
+          <div className="admin-panel admin-table-wrap">
             <table className="admin-table">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="px-5 pb-3 pt-4">Código</th>
+                <tr>
+                  <th>Código</th>
                   <th>Arquivo</th>
-                  <th>Jogadores</th>
+                  <th className="text-center">Jogadores</th>
                   <th>Pagamento</th>
                   <th>Status</th>
                   <th>Criada em</th>
-                  <th>Ações</th>
+                  <th className="text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,19 +115,19 @@ export default function AdminRooms() {
                   const arch = r as unknown as Record<string, Record<string, string>>
                   return (
                     <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
-                      <td className="px-5">
+                      <td>
                         <span className="font-display text-xl font-black tracking-widest">{r.code}</span>
                       </td>
                       <td className="text-sm">{arch.archives?.title}: {arch.archives?.subtitle}</td>
                       <td className="font-mono text-center">{r.num_players}</td>
-                      <td>
+                      <td className="text-right">
                         <span className={r.payment_status === 'paid' ? 'badge-green' : 'badge-amber'}>
                           {r.payment_status === 'paid' ? 'Pago' : 'Pendente'}
                         </span>
                       </td>
                       <td><span className={statusStyle[r.status]}>{statusLabel[r.status]}</span></td>
                       <td className="font-mono text-[10px] text-white/40">{new Date(r.created_at).toLocaleDateString('pt-AO')}</td>
-                      <td>
+                      <td className="text-right">
                         <button
                           onClick={() => setConfirmRoom(r)}
                           disabled={closing === r.id}
@@ -144,13 +147,13 @@ export default function AdminRooms() {
 
       <div>
         <div className="font-mono text-[9px] text-white/20 tracking-widest mb-3">HISTÓRICO</div>
-        <div className="border border-border bg-surface2 overflow-hidden">
+        <div className="admin-panel admin-table-wrap">
           <table className="admin-table">
             <thead>
-              <tr className="border-b border-border">
-                <th className="px-5 pb-3 pt-4">Código</th>
+              <tr>
+                <th>Código</th>
                 <th>Arquivo</th>
-                <th>Jogadores</th>
+                <th className="text-center">Jogadores</th>
                 <th>Status</th>
                 <th>Criada em</th>
                 <th>Encerrada em</th>
@@ -158,12 +161,12 @@ export default function AdminRooms() {
             </thead>
             <tbody>
               {finishedRooms.length === 0 ? (
-                <tr><td colSpan={6} className="text-center font-mono text-[10px] text-white/15 py-8 px-5">Nenhuma sala terminada ainda</td></tr>
+                <tr><td colSpan={6} className="admin-empty">Nenhuma sala terminada ainda</td></tr>
               ) : finishedRooms.map((r, i) => {
                 const arch = r as unknown as Record<string, Record<string, string>>
                 return (
                   <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }} style={{ opacity: 0.5 }}>
-                    <td className="px-5">
+                    <td>
                       <span className="font-display text-lg font-black tracking-widest text-white/50">{r.code}</span>
                     </td>
                     <td className="text-sm text-white/40">{arch.archives?.title}: {arch.archives?.subtitle}</td>

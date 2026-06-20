@@ -54,17 +54,17 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-20">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-20 text-center">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center max-w-3xl mx-auto"
+          className="mx-auto flex w-full max-w-3xl flex-col items-center text-center"
         >
           {/* Logo */}
-          <div className="mb-8 relative inline-block">
+          <div className="relative mb-8 flex w-full justify-center">
             <motion.h1
-              className={`font-display text-[clamp(4rem,12vw,9rem)] font-black leading-none tracking-tight ${glitchActive ? 'text-red' : 'text-white'}`}
+              className={`w-full text-center font-display text-[clamp(4rem,12vw,9rem)] font-black leading-none tracking-tight ${glitchActive ? 'text-red' : 'text-white'}`}
               animate={glitchActive ? { x: [-2, 2, -1, 0], skewX: [-1, 1, 0] } : {}}
               transition={{ duration: 0.3 }}
               data-text="VÉRTICE"
@@ -73,8 +73,8 @@ export default function LandingPage() {
             </motion.h1>
             {glitchActive && (
               <>
-                <span className="absolute inset-0 font-display text-[clamp(4rem,12vw,9rem)] font-black text-blue/60 translate-x-1 -translate-y-0.5 leading-none">VÉRTICE</span>
-                <span className="absolute inset-0 font-display text-[clamp(4rem,12vw,9rem)] font-black text-red/60 -translate-x-1 translate-y-0.5 leading-none">VÉRTICE</span>
+                <span className="absolute inset-0 text-center font-display text-[clamp(4rem,12vw,9rem)] font-black leading-none text-blue/60 translate-x-1 -translate-y-0.5">VÉRTICE</span>
+                <span className="absolute inset-0 text-center font-display text-[clamp(4rem,12vw,9rem)] font-black leading-none text-red/60 -translate-x-1 translate-y-0.5">VÉRTICE</span>
               </>
             )}
           </div>
@@ -83,7 +83,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="font-mono text-sm text-white/40 tracking-[0.3em] mb-4 uppercase"
+            className="mx-auto text-center font-mono text-sm text-white/40 tracking-[0.3em] mb-4 uppercase"
           >
             A verdade não é o que parece
           </motion.p>
@@ -92,7 +92,7 @@ export default function LandingPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
-            className="font-sans text-white/60 text-lg mb-16 max-w-md mx-auto leading-relaxed"
+            className="mx-auto max-w-md text-center font-sans text-white/60 text-lg mb-16 leading-relaxed"
           >
             Cada jogador tem uma versão. Só um vê o todo.
           </motion.p>
@@ -102,18 +102,18 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+            className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row"
           >
             <button
               onClick={() => navigate('/criar-sala')}
-              className="btn-primary min-w-[200px] tracking-[0.15em]"
+              className="btn-primary w-full min-w-[200px] tracking-[0.15em] sm:w-auto"
             >
               Criar Sala
             </button>
 
             <button
               onClick={() => setShowJoin(!showJoin)}
-              className="btn-ghost min-w-[200px] tracking-[0.15em]"
+              className="btn-ghost w-full min-w-[200px] tracking-[0.15em] sm:w-auto"
             >
               Entrar com Código
             </button>
@@ -157,7 +157,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 px-8 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-center">
           <span className="font-mono text-[10px] text-white/20 tracking-widest">© 2025 VÉRTICE</span>
           <span className="font-mono text-[10px] text-white/20 tracking-widest">Todos os direitos reservados</span>
         </div>

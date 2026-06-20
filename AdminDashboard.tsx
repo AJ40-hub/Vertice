@@ -114,27 +114,29 @@ export default function AdminDashboard() {
       </div>
 
       {/* Top games table */}
-      <div className="border border-border bg-surface2 p-5">
-        <div className="font-mono text-[10px] text-white/30 tracking-widest mb-4">JOGOS MAIS JOGADOS</div>
+      <div className="admin-panel-pad">
+        <div className="admin-section-title mb-4">JOGOS MAIS JOGADOS</div>
         {topGames.length === 0 ? (
-          <div className="font-mono text-xs text-white/15 py-6 text-center">Sem dados ainda</div>
+          <div className="admin-empty">Sem dados ainda</div>
         ) : (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>#</th><th>Arquivo</th><th className="text-right">Sessões</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topGames.map((g, i) => (
-                <tr key={g.title}>
-                  <td className="font-mono text-white/20 w-8">{i + 1}</td>
-                  <td className="font-sans font-semibold">{g.title}</td>
-                  <td className="text-right font-mono">{g.plays}</td>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Arquivo</th><th className="text-right">Sessões</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {topGames.map((g, i) => (
+                  <tr key={g.title}>
+                    <td className="font-mono text-white/20 w-8">{i + 1}</td>
+                    <td className="font-sans font-semibold">{g.title}</td>
+                    <td className="text-right font-mono">{g.plays}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

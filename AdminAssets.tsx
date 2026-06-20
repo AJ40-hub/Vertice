@@ -351,29 +351,29 @@ export default function AdminAssets() {
       </div>
 
       {/* Tabela */}
-      <div className="border border-border bg-surface2 overflow-hidden mb-8">
+      <div className="admin-panel admin-table-wrap mb-8">
         <table className="admin-table">
           <thead>
-            <tr className="border-b border-border">
-              <th className="px-5 pb-3 pt-4">Asset</th>
+            <tr>
+              <th>Asset</th>
               <th>Tipo</th>
               <th>Destinatário</th>
               <th>Envio</th>
               <th>Expira</th>
               <th>Tamanho</th>
-              <th>Ações</th>
+              <th className="text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center font-mono text-[10px] text-white/15 py-12 px-5">
+                <td colSpan={7} className="admin-empty">
                   Nenhum asset — clica em "+ Novo Asset" para começar
                 </td>
               </tr>
             ) : filtered.map((a, i) => (
               <motion.tr key={a.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}>
-                <td className="px-5">
+                <td>
                   <div className="font-sans font-600 text-sm">{a.name}</div>
                   {a.description && <div className="font-mono text-[9px] text-white/30 mt-0.5">{a.description}</div>}
                   <div className="font-mono text-[9px] text-white/15 mt-0.5 truncate max-w-[180px]">{a.file_name}</div>
@@ -399,7 +399,7 @@ export default function AdminAssets() {
                 </td>
                 <td className="font-mono text-xs text-white/40">{formatSize(a.file_size)}</td>
                 <td>
-                  <div className="flex gap-2">
+                  <div className="flex justify-end gap-2">
                     <button onClick={() => openAsset(a)}
                       className="font-mono text-[9px] text-blue/60 hover:text-blue border border-blue/20 px-2 py-1 transition-all">
                       VER

@@ -42,7 +42,7 @@ export default function AdminFinancials() {
       </div>
 
       {/* P&L Summary */}
-      <div className="grid grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-1 gap-3 mb-8 sm:grid-cols-2 xl:grid-cols-4">
         <div className="border border-green/20 bg-green/5 p-5">
           <div className="font-mono text-[9px] text-white/30 tracking-widest mb-2">RECEITA TOTAL</div>
           <div className="font-display text-3xl font-black text-green">{totalRevenue.toLocaleString()}</div>
@@ -68,7 +68,7 @@ export default function AdminFinancials() {
       </div>
 
       {/* Chart */}
-      <div className="border border-border bg-surface2 p-5 mb-6">
+      <div className="admin-panel-pad mb-6">
         <div className="font-mono text-[10px] text-white/30 tracking-widest mb-4">EVOLUÇÃO FINANCEIRA — 30 DIAS</div>
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={chartData}>
@@ -89,16 +89,16 @@ export default function AdminFinancials() {
         </ResponsiveContainer>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Payments table */}
-        <div className="border border-border bg-surface2 p-5">
-          <div className="font-mono text-[10px] text-green/60 tracking-widest mb-4">RECEITAS</div>
-          <div className="overflow-y-auto max-h-80">
+        <div className="admin-panel-pad">
+          <div className="admin-section-title mb-4 text-green/60">RECEITAS</div>
+          <div className="max-h-80 overflow-auto">
             <table className="admin-table">
               <thead><tr><th>Data</th><th>Arquivo</th><th>Jogadores</th><th className="text-right">Valor</th></tr></thead>
               <tbody>
                 {payments.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center font-mono text-[10px] text-white/15 py-6">Sem receitas ainda</td></tr>
+                  <tr><td colSpan={4} className="admin-empty">Sem receitas ainda</td></tr>
                 ) : payments.map((p) => (
                   <tr key={p.id}>
                     <td className="font-mono text-[10px]">{new Date(p.created_at).toLocaleDateString('pt-AO')}</td>
@@ -113,14 +113,14 @@ export default function AdminFinancials() {
         </div>
 
         {/* Prizes costs table */}
-        <div className="border border-border bg-surface2 p-5">
-          <div className="font-mono text-[10px] text-red/60 tracking-widest mb-4">CUSTOS COM PRÉMIOS</div>
-          <div className="overflow-y-auto max-h-80">
+        <div className="admin-panel-pad">
+          <div className="admin-section-title mb-4 text-red/60">CUSTOS COM PRÉMIOS</div>
+          <div className="max-h-80 overflow-auto">
             <table className="admin-table">
               <thead><tr><th>Prémio</th><th>Valor</th><th>Data</th></tr></thead>
               <tbody>
                 {prizes.length === 0 ? (
-                  <tr><td colSpan={3} className="text-center font-mono text-[10px] text-white/15 py-6">Sem custos ainda</td></tr>
+                  <tr><td colSpan={3} className="admin-empty">Sem custos ainda</td></tr>
                 ) : prizes.map((p) => (
                   <tr key={p.id}>
                     <td className="font-mono text-white/50">Prémio {p.prize_number}</td>
@@ -141,7 +141,7 @@ export default function AdminFinancials() {
       </div>
 
       {/* Net summary */}
-      <div className="mt-4 border border-white/10 bg-surface2 p-5">
+      <div className="admin-panel-pad mt-4">
         <div className="font-mono text-[10px] text-white/30 tracking-widest mb-4">DEMONSTRAÇÃO DE RESULTADOS</div>
         <div className="space-y-2">
           <div className="flex justify-between py-2 border-b border-border">
