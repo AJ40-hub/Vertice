@@ -3,33 +3,59 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { Room } from './supabase'
 
+type AccessIssue = {
+  type: 'invalid_code' | 'room_not_found' | 'room_closed' | 'room_full' | 'room_started' | 'generic'
+  code?: string
+  message: string
+}
+
+function normalizeIssueType(type: unknown): AccessIssue['type'] {
+  return ['invalid_code', 'room_not_found', 'room_closed', 'room_full', 'room_started'].includes(String(type))
+    ? String(type) as AccessIssue['type']
+    : 'generic'
+}
+
 export default function JoinRoomPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [code, setCode] = useState(params.get('code') || '')
+  const [code, setCode] = useState((params.get('code') || '').toUpperCase())
   const [room, setRoom] = useState<Room | null>(null)
   const [name, setName] = useState('')
   const [gender, setGender] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [step, setStep] = useState<'code' | 'data'>(params.get('code') ? 'data' : 'code')
+  const [accessIssue, setAccessIssue] = useState<AccessIssue | null>(null)
+  const [step, setStep] = useState<'code' | 'data'>('code')
 
   useEffect(() => {
     if (params.get('code')) lookupRoom(params.get('code')!)
   }, [])
 
   async function lookupRoom(c: string) {
-    setLoading(true); setError('')
+    const normalizedCode = c.trim().toUpperCase()
+    setCode(normalizedCode)
+    setLoading(true); setError(''); setAccessIssue(null); setRoom(null)
     const response = await fetch('/api/lookup-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: c }),
+      body: JSON.stringify({ code: normalizedCode }),
     })
     const data = await response.json()
     setLoading(false)
-    if (!response.ok || !data?.room) { setError(data?.error || 'Código inválido.'); return }
+    if (!response.ok || !data?.room) {
+      const issue: AccessIssue = {
+        type: normalizeIssueType(data?.type),
+        code: data?.code || normalizedCode,
+        message: data?.error || 'Não foi possível aceder a esta sala.',
+      }
+      setAccessIssue(issue)
+      setError(issue.message)
+      setStep('code')
+      return
+    }
     setRoom(data.room as Room)
+    setAccessIssue(null)
     setStep('data')
   }
 
@@ -45,6 +71,15 @@ export default function JoinRoomPage() {
     const data = await response.json()
 
     if (!response.ok || !data?.player || !data?.room) {
+      if (data?.type) {
+        setAccessIssue({
+          type: normalizeIssueType(data.type),
+          code: data.code || room.code,
+          message: data.error || 'Não foi possível aceder a esta sala.',
+        })
+        setRoom(null)
+        setStep('code')
+      }
       setError(data?.error || 'Erro ao entrar. Tenta novamente.')
       setLoading(false)
       return
@@ -54,6 +89,50 @@ export default function JoinRoomPage() {
     sessionStorage.setItem('vertice_player', JSON.stringify(data.player))
     setLoading(false)
     navigate(`/sala/${data.room.code}/espera`)
+  }
+
+  function renderAccessIssue() {
+    if (!accessIssue) return null
+
+    const isClosed = accessIssue.type === 'room_closed'
+    const isMissing = accessIssue.type === 'room_not_found'
+    const title = isClosed
+      ? `Sala ${accessIssue.code || code} encerrada`
+      : isMissing
+        ? 'Sala não encontrada'
+        : accessIssue.message
+    const message = isClosed
+      ? 'Esta sala foi encerrada e já não aceita novos jogadores.'
+      : isMissing
+        ? 'A sala que tentas aceder não existe. Deseja criar uma sala?'
+        : accessIssue.message
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`mb-6 border p-5 ${isMissing ? 'border-amber/25 bg-amber/5' : 'border-red/25 bg-red/5'}`}
+      >
+        <div className={`font-mono text-[10px] tracking-[0.3em] mb-2 ${isMissing ? 'text-amber/70' : 'text-red/70'}`}>
+          {isMissing ? 'CÓDIGO SEM REGISTO' : 'ACESSO BLOQUEADO'}
+        </div>
+        <div className="font-display text-xl font-bold mb-2">{title}</div>
+        <p className="font-mono text-xs text-white/45 leading-relaxed mb-5">{message}</p>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {(isMissing || isClosed) && (
+            <button onClick={() => navigate('/criar-sala')} className="btn-primary flex-1 text-xs">
+              Criar Sala
+            </button>
+          )}
+          <button
+            onClick={() => { setAccessIssue(null); setError(''); setCode('') }}
+            className="btn-ghost flex-1 text-xs"
+          >
+            Tentar outro código
+          </button>
+        </div>
+      </motion.div>
+    )
   }
 
   return (
@@ -78,12 +157,13 @@ export default function JoinRoomPage() {
                   placeholder="XXXX"
                   maxLength={4}
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setAccessIssue(null); setError('') }}
                   onKeyDown={(e) => e.key === 'Enter' && code.length === 4 && lookupRoom(code)}
                 />
               </div>
 
-              {error && <p className="font-mono text-xs text-red text-center mb-4">{error}</p>}
+              {renderAccessIssue()}
+              {error && !accessIssue && <p className="font-mono text-xs text-red text-center mb-4">{error}</p>}
 
               <button
                 onClick={() => lookupRoom(code)}

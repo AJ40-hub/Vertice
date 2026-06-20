@@ -20,13 +20,24 @@ export default async function handler(req: any, res: any) {
       .from('rooms')
       .select('*, archives(id, title, subtitle, duration_minutes, min_players, max_players, price_per_player)')
       .eq('code', code)
-      .single()
+      .maybeSingle()
 
     if (roomErr || !room) {
-      return res.status(404).json({ error: 'Código inválido.' })
+      return res.status(404).json({
+        type: 'room_not_found',
+        code,
+        error: 'A sala que tentas aceder não existe.',
+      })
     }
-    if (room.status === 'finished' || room.status === 'playing') {
-      return res.status(409).json({ error: 'Esta sala já não aceita novos jogadores.' })
+    if (room.status === 'finished') {
+      return res.status(409).json({
+        type: 'room_closed',
+        code: room.code,
+        error: `Sala ${room.code} encerrada.`,
+      })
+    }
+    if (room.status === 'playing') {
+      return res.status(409).json({ type: 'room_started', code: room.code, error: 'Esta sala já está em jogo.' })
     }
     if (room.payment_status !== 'paid') {
       return res.status(402).json({ error: 'Pagamento ainda não confirmado.' })

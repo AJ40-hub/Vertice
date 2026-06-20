@@ -11,6 +11,7 @@ export default function WaitingRoomPage() {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [roomClosed, setRoomClosed] = useState(false)
+  const [closedRoomCode, setClosedRoomCode] = useState('')
   const [glitch, setGlitch] = useState(false)
   const countdownStartedRef = useRef(false)
   const countdownIntervalRef = useRef<number | null>(null)
@@ -51,7 +52,13 @@ export default function WaitingRoomPage() {
           clearInterval(countdownIntervalRef.current)
           countdownIntervalRef.current = null
         }
+        sessionStorage.removeItem('vertice_room')
+        sessionStorage.removeItem('vertice_player')
         setCountdown(null)
+        setClosedRoomCode(data.room.code || code || '')
+        setPlayers([])
+        setCurrentPlayer(null)
+        setRoom(null)
         setRoomClosed(true)
         return
       }
@@ -122,9 +129,11 @@ export default function WaitingRoomPage() {
       <div className="min-h-screen bg-black grain scanlines flex items-center justify-center px-6 text-center">
         <div className="w-full max-w-md border border-red/20 bg-red/5 p-8">
           <div className="font-mono text-[10px] text-red/60 tracking-[0.35em] mb-4">SALA ENCERRADA</div>
-          <h1 className="font-display text-3xl font-black mb-3">Ligação terminada</h1>
+          <h1 className="font-display text-3xl font-black mb-3">
+            Sala {closedRoomCode || code} encerrada
+          </h1>
           <p className="font-mono text-xs text-white/40 leading-relaxed mb-8">
-            Esta sala foi encerrada pelo administrador antes do início do jogo.
+            Esta sala foi encerrada pelo administrador. A tua ligação foi removida da sala de espera.
           </p>
           <button
             onClick={() => {
