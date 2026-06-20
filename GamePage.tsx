@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Paperclip,
   Phone,
+  Power,
   Search,
   Signal,
   Users,
@@ -103,6 +104,20 @@ function clueFileName(clue: Clue) {
   return asText(content.file) || asText(content.asset_name)
 }
 
+function clueFileUrl(clue: Clue) {
+  const content = clueContent(clue)
+  const candidates = [
+    clue.file_url,
+    asText(content.signed_url),
+    asText(content.file_url),
+    asText(content.asset_url),
+    asText(content.download_url),
+    asText(content.url),
+  ].filter(Boolean) as string[]
+
+  return candidates.find((url) => url.startsWith('https://') || url.startsWith('http://') || url.startsWith('/')) || ''
+}
+
 function clueText(clue: Clue) {
   const content = clueContent(clue)
   return asText(content.text) || asText(content.caption) || asText(content.transcript) || ''
@@ -154,6 +169,9 @@ export default function GamePage() {
   const [activeApp, setActiveApp] = useState<AppView>('home')
   const [selectedClue, setSelectedClue] = useState<Clue | null>(null)
   const [betrayalPrompt, setBetrayalPrompt] = useState(false)
+  const [finishPrompt, setFinishPrompt] = useState(false)
+  const [finishingRoom, setFinishingRoom] = useState(false)
+  const [finishError, setFinishError] = useState('')
   const [kairoMessage, setKairoMessage] = useState<string | null>(null)
   const [glitch, setGlitch] = useState(false)
   const [newClueAlert, setNewClueAlert] = useState<Clue | null>(null)
@@ -248,6 +266,12 @@ export default function GamePage() {
   }, [room?.status])
 
   useEffect(() => {
+    if (!selectedClue) return
+    const latest = clues.find((clue) => clue.id === selectedClue.id)
+    if (latest && latest !== selectedClue) setSelectedClue(latest)
+  }, [clues, selectedClue])
+
+  useEffect(() => {
     if (!room || !player || finishRequestedRef.current || room.status !== 'playing') return
     if (gameElapsedSeconds < 90 * 60) return
     finishRequestedRef.current = true
@@ -268,6 +292,34 @@ export default function GamePage() {
       body: JSON.stringify({ action: 'betrayal', room_id: room.id, player_id: player.id, choice }),
     })
     setBetrayalPrompt(false)
+  }
+
+  async function finishRoomManually() {
+    if (!room || !player || !player.is_host || finishingRoom) return
+
+    setFinishingRoom(true)
+    setFinishError('')
+    try {
+      const response = await fetch('/api/finish-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: room.id, player_id: player.id }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setFinishError(data?.error || 'Não foi possível encerrar a sala.')
+        return
+      }
+      if (data?.room) {
+        setRoom(data.room)
+        sessionStorage.setItem('vertice_room', JSON.stringify(data.room))
+      }
+      setFinishPrompt(false)
+    } catch {
+      setFinishError('A ligação falhou. Tenta novamente.')
+    } finally {
+      setFinishingRoom(false)
+    }
   }
 
   async function openClue(clue: Clue) {
@@ -325,6 +377,22 @@ export default function GamePage() {
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {finishPrompt && (
+              <HostFinishSheet
+                loading={finishingRoom}
+                error={finishError}
+                onCancel={() => {
+                  if (!finishingRoom) {
+                    setFinishError('')
+                    setFinishPrompt(false)
+                  }
+                }}
+                onConfirm={finishRoomManually}
+              />
+            )}
+          </AnimatePresence>
+
           <div className="min-h-0 flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
               {activeApp === 'home' && (
@@ -339,6 +407,7 @@ export default function GamePage() {
                   elapsedSec={elapsedSec}
                   onOpenApp={setActiveApp}
                   onOpenClue={openClue}
+                  onRequestFinish={player?.is_host ? () => setFinishPrompt(true) : undefined}
                 />
               )}
 
@@ -556,6 +625,53 @@ function BetrayalSheet({ onReveal, onKeep }: { onReveal: () => void; onKeep: () 
   )
 }
 
+function HostFinishSheet({
+  loading,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  loading: boolean
+  error: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-40 flex items-end bg-black/88"
+    >
+      <motion.div
+        initial={{ y: 90 }}
+        animate={{ y: 0 }}
+        exit={{ y: 90 }}
+        className="w-full border-t border-red/25 bg-zinc-950/96 p-6 backdrop-blur-md"
+      >
+        <div className="mb-3 font-mono text-[10px] tracking-[0.25em] text-red/70">CONTROLO DO HOST</div>
+        <h3 className="mb-3 font-display text-xl font-black text-white">Encerrar sala?</h3>
+        <p className="mb-5 font-sans text-sm leading-relaxed text-white/66">
+          A sala será encerrada para todos os jogadores. Se o jogo já estiver em andamento, o ranking será calculado com o progresso atual.
+        </p>
+        {error && (
+          <div className="mb-4 rounded-2xl border border-red/35 bg-red/10 p-3 font-sans text-xs leading-relaxed text-red/90">
+            {error}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={onCancel} disabled={loading} className="btn-ghost px-3 py-4 text-xs disabled:opacity-40">
+            Cancelar
+          </button>
+          <button type="button" onClick={onConfirm} disabled={loading} className="btn-primary px-3 py-4 text-xs disabled:opacity-50">
+            {loading ? 'A encerrar...' : 'Encerrar'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 function PhoneHome({
   variant,
   player,
@@ -566,6 +682,7 @@ function PhoneHome({
   elapsedSec,
   onOpenApp,
   onOpenClue,
+  onRequestFinish,
 }: {
   variant: DeviceVariant
   player: Player | null
@@ -576,6 +693,7 @@ function PhoneHome({
   elapsedSec: number
   onOpenApp: (app: AppView) => void
   onOpenClue: (clue: Clue) => void
+  onRequestFinish?: () => void
 }) {
   const isIos = variant === 'ios'
   return (
@@ -605,6 +723,16 @@ function PhoneHome({
           <div className="mt-2 font-mono text-[10px] text-red">
             {activeClues.length} pista{activeClues.length !== 1 ? 's' : ''} ativa{activeClues.length !== 1 ? 's' : ''}
           </div>
+        )}
+        {onRequestFinish && (
+          <button
+            type="button"
+            onClick={onRequestFinish}
+            className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-red/35 bg-red/10 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-red/20 active:scale-[0.99]"
+          >
+            <Power size={14} />
+            Encerrar sala
+          </button>
         )}
       </section>
 
@@ -859,7 +987,7 @@ function ClueListItem({ clue, onClick }: { clue: Clue; onClick: () => void }) {
 
 function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
   const content = clueContent(clue)
-  const fileUrl = clue.file_url || asText(content.signed_url)
+  const fileUrl = clueFileUrl(clue)
   const fileName = clueFileName(clue)
   const text = clueText(clue)
   const canOpenFile = Boolean(fileUrl && !clue.expired)

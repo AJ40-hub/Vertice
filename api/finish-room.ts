@@ -68,16 +68,18 @@ export default async function handler(req: any, res: any) {
 
     if (roomErr || !room) return res.status(404).json({ error: 'Room not found' })
 
+    let isHostPlayer = false
     if (!isAdmin) {
       if (!playerId) return res.status(401).json({ error: 'Missing player_id' })
-      const { data: player } = await supabase.from('players').select('id').eq('id', playerId).eq('room_id', roomId).single()
+      const { data: player } = await supabase.from('players').select('id, is_host').eq('id', playerId).eq('room_id', roomId).single()
       if (!player) return res.status(403).json({ error: 'Player does not belong to this room' })
+      isHostPlayer = Boolean(player.is_host)
     }
 
     const archive = room.archives as { title?: string; subtitle?: string; duration_minutes?: number } | null
     const requiredDuration = Math.max(1, archive?.duration_minutes || 90) * 60
     const elapsedSeconds = elapsedSecondsForRoom(room)
-    const canFinish = isAdmin || room.status === 'finished' || elapsedSeconds >= requiredDuration
+    const canFinish = isAdmin || isHostPlayer || room.status === 'finished' || elapsedSeconds >= requiredDuration
 
     if (!canFinish) {
       return requireAdmin(req, res)

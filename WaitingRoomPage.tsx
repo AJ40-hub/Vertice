@@ -12,6 +12,9 @@ export default function WaitingRoomPage() {
   const [countdown, setCountdown] = useState<number | null>(null)
   const [roomClosed, setRoomClosed] = useState(false)
   const [closedRoomCode, setClosedRoomCode] = useState('')
+  const [closePrompt, setClosePrompt] = useState(false)
+  const [closingRoom, setClosingRoom] = useState(false)
+  const [closeError, setCloseError] = useState('')
   const [glitch, setGlitch] = useState(false)
   const countdownStartedRef = useRef(false)
   const countdownIntervalRef = useRef<number | null>(null)
@@ -120,6 +123,42 @@ export default function WaitingRoomPage() {
     }, 1000)
   }
 
+  async function closeRoomAsHost() {
+    if (!room || !currentPlayer?.is_host || closingRoom) return
+
+    setClosingRoom(true)
+    setCloseError('')
+    try {
+      const response = await fetch('/api/finish-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: room.id, player_id: currentPlayer.id }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setCloseError(data?.error || 'Não foi possível encerrar a sala.')
+        return
+      }
+      if (countdownIntervalRef.current !== null) {
+        clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+      }
+      sessionStorage.removeItem('vertice_room')
+      sessionStorage.removeItem('vertice_player')
+      setCountdown(null)
+      setClosedRoomCode(data?.room?.code || room.code || code || '')
+      setPlayers([])
+      setCurrentPlayer(null)
+      setRoom(null)
+      setClosePrompt(false)
+      setRoomClosed(true)
+    } catch {
+      setCloseError('A ligação falhou. Tenta novamente.')
+    } finally {
+      setClosingRoom(false)
+    }
+  }
+
   const filled = players.length
   const total = room?.num_players || 6
   const pct = (filled / total) * 100
@@ -182,6 +221,58 @@ export default function WaitingRoomPage() {
               </motion.div>
               <div className="font-mono text-xs text-white/20 mt-4 tracking-widest">PREPARA-TE</div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {closePrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/82 px-6"
+          >
+            <motion.div
+              initial={{ y: 18, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 18, opacity: 0 }}
+              className="w-full max-w-sm border border-red/25 bg-surface2 p-6 text-left"
+            >
+              <div className="mb-4 font-mono text-[10px] tracking-[0.3em] text-red/70">CONTROLO DO HOST</div>
+              <h2 className="mb-3 font-display text-2xl font-black text-white">Encerrar sala?</h2>
+              <p className="mb-5 font-mono text-xs leading-relaxed text-white/45">
+                Todos os jogadores serão removidos da sala de espera e o jogo não será iniciado.
+              </p>
+              {closeError && (
+                <div className="mb-4 border border-red/35 bg-red/10 p-3 font-mono text-xs leading-relaxed text-red/90">
+                  {closeError}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!closingRoom) {
+                      setCloseError('')
+                      setClosePrompt(false)
+                    }
+                  }}
+                  disabled={closingRoom}
+                  className="btn-ghost px-3 py-3 text-xs disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={closeRoomAsHost}
+                  disabled={closingRoom}
+                  className="btn-primary px-3 py-3 text-xs disabled:opacity-50"
+                >
+                  {closingRoom ? 'A encerrar...' : 'Encerrar'}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -254,6 +345,16 @@ export default function WaitingRoomPage() {
           <div className="font-mono text-xs text-green tracking-widest uppercase">
             SALA COMPLETA — A INICIAR EM BREVE
           </div>
+        )}
+        {currentPlayer?.is_host && (
+          <button
+            type="button"
+            onClick={() => setClosePrompt(true)}
+            disabled={closingRoom}
+            className="mt-6 min-h-[44px] w-full border border-red/35 bg-red/10 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white transition-all hover:bg-red/20 disabled:opacity-40"
+          >
+            Encerrar sala
+          </button>
         )}
       </div>
     </div>
