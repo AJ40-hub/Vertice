@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, normalizeStoragePath } from '../server/_supabaseAdmin'
+import { getSupabaseAdmin, normalizeStoragePath } from './_lib/_supabaseAdmin'
 
 const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'vertice-assets'
 

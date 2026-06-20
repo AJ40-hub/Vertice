@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, normalizeRoomCode } from '../server/_supabaseAdmin'
+import { getSupabaseAdmin, normalizeRoomCode } from './_lib/_supabaseAdmin'
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

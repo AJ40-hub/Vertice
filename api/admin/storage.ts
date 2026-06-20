@@ -1,5 +1,5 @@
-import { requireAdmin } from '../../server/_adminAuth'
-import { getSupabaseAdmin, normalizeStoragePath, normalizeText } from '../../server/_supabaseAdmin'
+import { requireAdmin } from '../_lib/_adminAuth'
+import { getSupabaseAdmin, normalizeStoragePath, normalizeText } from '../_lib/_supabaseAdmin'
 
 const DEFAULT_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'vertice-assets'
 

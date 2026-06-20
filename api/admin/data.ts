@@ -1,5 +1,5 @@
-import { requireAdmin } from '../../server/_adminAuth'
-import { getSupabaseAdmin, normalizeText } from '../../server/_supabaseAdmin'
+import { requireAdmin } from '../_lib/_adminAuth'
+import { getSupabaseAdmin, normalizeText } from '../_lib/_supabaseAdmin'
 
 const ALLOWED_PAYMENT_MODES = new Set(['host', 'individual'])
 
