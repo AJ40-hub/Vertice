@@ -1,5 +1,5 @@
-import { createAdminSessionCookie } from '../_adminAuth'
 import { timingSafeEqual } from 'node:crypto'
+import { createAdminLogoutCookie, createAdminSessionCookie, verifyAdminSession } from '../../server/_adminAuth'
 
 const MAX_ATTEMPTS = 5
 const LOCK_MS = 15 * 60 * 1000
@@ -17,11 +17,16 @@ function safeEqual(a: string, b: string) {
   return left.length === right.length && timingSafeEqual(left, right)
 }
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+function session(res: any, req: any) {
+  return res.status(200).json({ authenticated: verifyAdminSession(req) })
+}
 
+function logout(res: any) {
+  res.setHeader('Set-Cookie', createAdminLogoutCookie())
+  return res.status(200).json({ ok: true })
+}
+
+function login(req: any, res: any) {
   const adminPassword = process.env.ADMIN_PASSWORD
   if (!adminPassword) {
     return res.status(500).json({ error: 'Admin password is not configured' })
@@ -47,4 +52,19 @@ export default async function handler(req: any, res: any) {
   attempts.delete(ip)
   res.setHeader('Set-Cookie', createAdminSessionCookie())
   return res.status(200).json({ ok: true })
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method === 'GET') return session(res, req)
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const action = typeof req.body?.action === 'string' ? req.body.action : ''
+  if (action === 'login') return login(req, res)
+  if (action === 'logout') return logout(res)
+  if (action === 'session') return session(res, req)
+
+  return res.status(400).json({ error: 'Unknown auth action' })
 }

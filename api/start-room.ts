@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from './_supabaseAdmin'
+import { getSupabaseAdmin } from '../server/_supabaseAdmin'
 import { ARQUIVO01_EVENTS, ROLES } from '../gameEngine'
 
 function shuffle<T>(items: T[]) {

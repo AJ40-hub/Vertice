@@ -1,5 +1,5 @@
-import { requireAdmin, verifyAdminSession } from './_adminAuth'
-import { getSupabaseAdmin } from './_supabaseAdmin'
+import { requireAdmin, verifyAdminSession } from '../server/_adminAuth'
+import { getSupabaseAdmin } from '../server/_supabaseAdmin'
 import { calculateScore } from '../gameEngine'
 
 function elapsedSecondsForRoom(room: any) {
