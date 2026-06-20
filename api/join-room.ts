@@ -1,4 +1,4 @@
-import { getSupabaseAdmin, isValidGender, isValidWhatsApp, normalizeRoomCode, normalizeText, normalizeWhatsApp } from './_lib/_supabaseAdmin'
+import { getSupabaseAdmin, isValidGender, isValidWhatsApp, normalizeRoomCode, normalizeText, normalizeWhatsApp } from './_lib/_supabaseAdmin.js'
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

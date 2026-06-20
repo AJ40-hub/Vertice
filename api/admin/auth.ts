@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
-import { createAdminLogoutCookie, createAdminSessionCookie, verifyAdminSession } from '../_lib/_adminAuth'
+import { createAdminLogoutCookie, createAdminSessionCookie, verifyAdminSession } from '../_lib/_adminAuth.js'
 
 const MAX_ATTEMPTS = 5
 const LOCK_MS = 15 * 60 * 1000

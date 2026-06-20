@@ -1,5 +1,5 @@
-import { getSupabaseAdmin } from './_lib/_supabaseAdmin'
-import { ARQUIVO01_EVENTS, ROLES } from '../gameEngine'
+import { getSupabaseAdmin } from './_lib/_supabaseAdmin.js'
+import { ARQUIVO01_EVENTS, ROLES } from '../gameEngine.js'
 
 function shuffle<T>(items: T[]) {
   return [...items].sort(() => Math.random() - 0.5)

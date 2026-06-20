@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import { getSupabaseAdmin, isValidGender, isValidWhatsApp, normalizeText, normalizeWhatsApp } from './_lib/_supabaseAdmin'
+import { getSupabaseAdmin, isValidGender, isValidWhatsApp, normalizeText, normalizeWhatsApp } from './_lib/_supabaseAdmin.js'
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'

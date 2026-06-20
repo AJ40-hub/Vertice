@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from './_lib/_supabaseAdmin'
+import { getSupabaseAdmin } from './_lib/_supabaseAdmin.js'
 
 const roleMap: Record<string, string> = {
   A: 'detetive',

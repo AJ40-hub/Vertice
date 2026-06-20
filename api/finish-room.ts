@@ -1,6 +1,6 @@
-import { requireAdmin, verifyAdminSession } from './_lib/_adminAuth'
-import { getSupabaseAdmin } from './_lib/_supabaseAdmin'
-import { calculateScore } from '../gameEngine'
+import { requireAdmin, verifyAdminSession } from './_lib/_adminAuth.js'
+import { getSupabaseAdmin } from './_lib/_supabaseAdmin.js'
+import { calculateScore } from '../gameEngine.js'
 
 function elapsedSecondsForRoom(room: any) {
   if (!room.started_at) return 0
