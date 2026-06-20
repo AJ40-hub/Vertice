@@ -157,7 +157,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 px-8 py-4">
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-center">
+        <div className="flex items-center justify-between gap-4">
           <span className="font-mono text-[10px] text-white/20 tracking-widest">© 2025 VÉRTICE</span>
           <span className="font-mono text-[10px] text-white/20 tracking-widest">Todos os direitos reservados</span>
         </div>
