@@ -18,6 +18,43 @@ function replaceHackerName(value: unknown, hackerName: string): unknown {
   return value
 }
 
+type ArchiveAsset = {
+  name: string
+  description: string | null
+  file_type: string
+  file_name: string
+  file_url: string
+  target_player: string
+  trigger_minute: number | null
+  trigger_second: number | null
+  expires_seconds: number | null
+  is_postgame: boolean
+}
+
+function normalizeFileKey(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function eventTypeFromAsset(fileType: string) {
+  if (fileType === 'pdf') return 'document'
+  return fileType || 'document'
+}
+
+function titleFromAsset(asset: ArchiveAsset) {
+  return asset.name.replace(/[_-]+/g, ' ').trim() || asset.file_name
+}
+
+function buildAssetContent(asset: ArchiveAsset) {
+  return {
+    title: titleFromAsset(asset),
+    text: asset.description || '',
+    file: asset.file_name,
+    file_url: asset.file_url,
+    asset_name: asset.name,
+    isPostgame: asset.is_postgame,
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -81,17 +118,55 @@ export default async function handler(req: any, res: any) {
       .eq('room_id', roomId)
 
     if (!existingEvents) {
-      await supabase.from('game_events').insert(ARQUIVO01_EVENTS.map((event) => ({
+      const { data: assets } = await supabase
+        .from('assets')
+        .select('name, description, file_type, file_name, file_url, target_player, trigger_minute, trigger_second, expires_seconds, is_postgame')
+        .eq('archive_id', claimedRoom.archive_id)
+
+      const assetByFile = new Map<string, ArchiveAsset>()
+      const referencedAssets = new Set<string>()
+      ;((assets || []) as ArchiveAsset[]).forEach((asset) => {
+        assetByFile.set(normalizeFileKey(asset.file_name), asset)
+        assetByFile.set(normalizeFileKey(asset.name), asset)
+      })
+
+      const scriptedEvents = ARQUIVO01_EVENTS.map((event) => {
+        const content = replaceHackerName(event.content, hackerName) as Record<string, unknown>
+        const fileKey = normalizeFileKey(content.file)
+        const asset = fileKey ? assetByFile.get(fileKey) : null
+        if (asset) {
+          referencedAssets.add(asset.file_name)
+          content.file_url = asset.file_url
+          content.asset_name = asset.name
+        }
+        return {
+          room_id: roomId,
+          archive_id: claimedRoom.archive_id,
+          trigger_minute: event.minute,
+          trigger_second: event.second,
+          event_type: event.type,
+          target: event.target,
+          content,
+          expires_seconds: event.expires ?? asset?.expires_seconds ?? null,
+          delivered: false,
+        }
+      })
+
+      const assetEvents = ((assets || []) as ArchiveAsset[])
+        .filter((asset) => asset.trigger_minute !== null && !referencedAssets.has(asset.file_name))
+        .map((asset) => ({
         room_id: roomId,
         archive_id: claimedRoom.archive_id,
-        trigger_minute: event.minute,
-        trigger_second: event.second,
-        event_type: event.type,
-        target: event.target,
-        content: replaceHackerName(event.content, hackerName),
-        expires_seconds: event.expires,
+        trigger_minute: asset.trigger_minute || 0,
+        trigger_second: asset.trigger_second || 0,
+        event_type: eventTypeFromAsset(asset.file_type),
+        target: asset.target_player,
+        content: buildAssetContent(asset),
+        expires_seconds: asset.expires_seconds,
         delivered: false,
-      })))
+      }))
+
+      await supabase.from('game_events').insert([...scriptedEvents, ...assetEvents])
     }
 
     const { data: updatedRoom, error: updateErr } = await supabase

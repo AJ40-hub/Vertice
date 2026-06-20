@@ -401,6 +401,7 @@ function AppView({ title, clues, onBack, onOpen }: { title: string; clues: Clue[
 
 function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
   const content = clue.content as Record<string, string>
+  const fileUrl = clue.file_url || content.signed_url
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
@@ -408,7 +409,12 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
         <span className="font-sans text-sm font-semibold text-white truncate">{clue.title}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-5">
-        {clue.clue_type === 'photo' && content.file && (
+        {clue.clue_type === 'photo' && fileUrl && (
+          <a href={fileUrl} target="_blank" rel="noreferrer" className="block w-full bg-surface3 border border-white/10 mb-4 overflow-hidden">
+            <img src={fileUrl} alt={clue.title} className="w-full max-h-[46vh] object-contain bg-black" />
+          </a>
+        )}
+        {clue.clue_type === 'photo' && !fileUrl && content.file && (
           <div className="w-full aspect-video bg-surface3 border border-white/10 flex items-center justify-center mb-4">
             <span className="font-mono text-xs text-white/20">[{content.file}]</span>
           </div>
@@ -431,6 +437,16 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
         )}
         {content.file && (
           <div className="font-mono text-[9px] text-white/15 mt-4">arquivo: {content.file}</div>
+        )}
+        {fileUrl && clue.clue_type !== 'photo' && (
+          <a
+            href={fileUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex w-full items-center justify-center border border-red/50 bg-red/10 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white hover:bg-red hover:text-white transition-colors"
+          >
+            Abrir ficheiro
+          </a>
         )}
         {clue.expires_at && (
           <ExpiryTimer expiresAt={clue.expires_at} />

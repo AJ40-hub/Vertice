@@ -72,7 +72,7 @@ export const ARQUIVO01_EVENTS = [
 
   // FASE 4
   { minute: 50, second: 0, type: 'clue', target: 'A', expires: 210,
-    content: { title: 'Contradição Direta', text: 'Logs mostram manipulação da IA. Alguém está a controlar o fluxo de informação.', file: 'A_Logs_Contradicao.pdf' }},
+    content: { title: 'Contradição Direta', text: 'Logs mostram manipulação da IA. Alguém está a controlar o fluxo de informação.', file: 'A_Pista2_RelatorioMedico.pdf' }},
   { minute: 55, second: 0, type: 'audio', target: 'B', expires: null,
     content: { title: 'Áudio Real de Kairo', transcript: '"Não sou eu que vos envio isto…"', duration: 10, file: 'B_Audio_Kairo.mp3' }},
   { minute: 58, second: 0, type: 'ia_message', target: 'all', expires: null,
@@ -88,7 +88,7 @@ export const ARQUIVO01_EVENTS = [
 
   // FASE 5
   { minute: 70, second: 0, type: 'clue', target: 'D', expires: null,
-    content: { title: 'Logs Quase Completos', text: 'user_profile: kairo_mendes\nreplication_status: active\nbehavior_sync: 97%', file: 'D_Codigo_Final.txt' }},
+    content: { title: 'Logs Quase Completos', text: 'user_profile: kairo_mendes\nreplication_status: active\nbehavior_sync: 97%', file: 'D_Pista2_TransferenciaProjeto.pdf' }},
   { minute: 72, second: 0, type: 'message', target: 'E', expires: null,
     content: { text: 'Desvia agora.\nTodos estão a olhar.' }},
   { minute: 75, second: 0, type: 'ia_message', target: 'all', expires: null,
