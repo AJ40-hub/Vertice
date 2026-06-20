@@ -28,6 +28,8 @@ export default function CreateRoomPage() {
   }, [])
 
   const totalAmount = selectedArchive ? selectedArchive.price_per_player * numPlayers : 0
+  const steps: Step[] = ['archive', 'players', 'payment', 'data']
+  const currentStepIndex = steps.indexOf(step)
 
   async function createRoom() {
     if (!selectedArchive || !name || !gender || !whatsapp) return
@@ -79,17 +81,28 @@ export default function CreateRoomPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-xl">
           {/* Progress */}
-          <div className="flex items-center gap-2 mb-10">
-            {(['archive', 'players', 'payment', 'data'] as Step[]).map((s, i) => (
-              <div key={s} className="flex items-center gap-2 flex-1">
-                <div className={`w-6 h-6 flex items-center justify-center font-mono text-xs border transition-all ${
-                  step === s ? 'border-red bg-red text-white' :
-                  (['archive', 'players', 'payment', 'data'].indexOf(step) > i) ? 'border-red/40 text-red/60' :
-                  'border-white/20 text-white/20'
-                }`}>{i + 1}</div>
-                {i < 3 && <div className={`flex-1 h-px transition-all ${(['archive', 'players', 'payment', 'data'].indexOf(step) > i) ? 'bg-red/40' : 'bg-white/10'}`} />}
-              </div>
-            ))}
+          <div className="relative mb-10 h-8 w-full">
+            <div className="absolute left-3 right-3 top-1/2 h-px -translate-y-1/2 bg-white/10" />
+            <div
+              className="absolute left-3 top-1/2 h-px -translate-y-1/2 bg-red/50 transition-all duration-500 ease-out"
+              style={{ width: `calc((100% - 1.5rem) * ${currentStepIndex / (steps.length - 1)})` }}
+            />
+            <div className="relative grid grid-cols-4 place-items-center">
+              {steps.map((s, i) => (
+                <div
+                  key={s}
+                  className={`grid h-6 w-6 place-items-center border font-mono text-xs transition-all ${
+                    step === s
+                      ? 'border-red bg-red text-white shadow-[0_0_22px_rgba(255,45,45,0.28)]'
+                      : currentStepIndex > i
+                        ? 'border-red/50 bg-black text-red'
+                        : 'border-white/15 bg-black text-white/25'
+                  }`}
+                >
+                  {i + 1}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Step: Archive */}
