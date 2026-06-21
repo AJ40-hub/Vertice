@@ -7,17 +7,17 @@ import {
   Bell,
   Bot,
   Clock3,
-  Download,
+  Eye,
   FileText,
   Globe2,
   Image as ImageIcon,
-  Lock,
   Mail,
   MessageCircle,
   Paperclip,
   Phone,
   Power,
-  Search,
+  Send,
+  Shield,
   Signal,
   Users,
   Wifi,
@@ -26,11 +26,12 @@ import type { LucideIcon } from 'lucide-react'
 import { useGameStore } from './gameStore'
 import { useRoomRealtime } from './useRealtime'
 import { deliverPendingEvents } from './gameEngine'
-import type { Clue, Player, Room } from './supabase'
+import type { Clue, Player, Room, RoomMessage, RoomVote } from './supabase'
 
-type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'clue'
+type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'veto' | 'clue'
 type DeviceVariant = 'ios' | 'android'
-type ThreadId = 'vertice' | 'group' | 'kairo' | 'system'
+type ChatId = 'vertice' | 'group' | `player:${string}`
+type ChatKind = 'vertice' | 'group' | 'player'
 
 type AppDefinition = {
   id: AppView
@@ -41,12 +42,26 @@ type AppDefinition = {
   accent: string
 }
 
-type Thread = {
-  id: ThreadId
+type PhoneChat = {
+  id: ChatId
   label: string
   subtitle: string
   icon: LucideIcon
+  kind: ChatKind
+  playerId?: string
   clues: Clue[]
+  messages: RoomMessage[]
+  unread: number
+}
+
+type ChatEntry = {
+  id: string
+  createdAt: string
+  sender: string
+  mine: boolean
+  body: string
+  clue: Clue | null
+  tone: 'ai' | 'kairo' | 'meme' | 'player'
 }
 
 function detectDeviceVariant(): DeviceVariant {
@@ -136,17 +151,17 @@ function isDocument(clue: Clue) {
   return clue.clue_type === 'document' || clue.clue_type === 'clue' || clue.clue_type === 'webapp_unlock' || fileName.endsWith('.pdf')
 }
 
-function isTextNote(clue: Clue) {
-  return !isPhoto(clue) && !isAudio(clue) && !isDocument(clue) && Boolean(clueText(clue))
+function isPdfFile(clue: Clue) {
+  return clueFileName(clue).toLowerCase().endsWith('.pdf') || clueFileUrl(clue).toLowerCase().includes('.pdf')
 }
 
-function getThreadId(clue: Clue): ThreadId {
-  if (clue.clue_type === 'kairo_appears') return 'kairo'
-  if (clue.clue_type === 'ia_message') return 'group'
-  if (clue.clue_type === 'message' || clue.clue_type === 'document' || clue.clue_type === 'photo' || clue.clue_type === 'audio' || clue.clue_type === 'clue') {
-    return 'vertice'
-  }
-  return 'system'
+function isVideoFile(clue: Clue) {
+  const fileName = clueFileName(clue).toLowerCase()
+  return fileName.endsWith('.mp4') || fileName.endsWith('.webm') || fileName.endsWith('.mov')
+}
+
+function isTextNote(clue: Clue) {
+  return !isPhoto(clue) && !isAudio(clue) && !isDocument(clue) && Boolean(clueText(clue))
 }
 
 function sortedClues(clues: Clue[], ascending = false) {
@@ -160,12 +175,39 @@ function unreadCount(clues: Clue[]) {
   return clues.filter((clue) => !clue.opened_at && !clue.expired).length
 }
 
+function isGroupClue(clue: Clue) {
+  return ['ia_message', 'meme', 'kairo_appears'].includes(clue.clue_type)
+}
+
+function isPrivateClue(clue: Clue) {
+  return !isGroupClue(clue)
+}
+
+function formatMessageTime(value: string) {
+  return new Date(value).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function GamePage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
   const variant = useDeviceVariant()
   const clock = useClock()
-  const { room, player, clues, setRoom, setPlayer, expireClue, setElapsed, incrementElapsed, gameElapsedSeconds } = useGameStore()
+  const {
+    room,
+    player,
+    players,
+    clues,
+    messages,
+    currentVote,
+    setRoom,
+    setPlayer,
+    setCurrentVote,
+    addMessage,
+    expireClue,
+    setElapsed,
+    incrementElapsed,
+    gameElapsedSeconds,
+  } = useGameStore()
   const [activeApp, setActiveApp] = useState<AppView>('home')
   const [selectedClue, setSelectedClue] = useState<Clue | null>(null)
   const [betrayalPrompt, setBetrayalPrompt] = useState(false)
@@ -322,6 +364,40 @@ export default function GamePage() {
     }
   }
 
+  async function sendRoomMessage(body: string, recipientPlayerId?: string) {
+    if (!room || !player) throw new Error('Sessão indisponível.')
+    const response = await fetch('/api/player-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        room_id: room.id,
+        player_id: player.id,
+        recipient_player_id: recipientPlayerId || null,
+        body,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data?.error || 'Não foi possível enviar a mensagem.')
+    if (data?.message) addMessage(data.message as RoomMessage)
+  }
+
+  async function castVeto(suspectPlayerId: string, reason: string) {
+    if (!room || !player) throw new Error('Sessão indisponível.')
+    const response = await fetch('/api/player-vote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        room_id: room.id,
+        player_id: player.id,
+        suspect_player_id: suspectPlayerId,
+        reason,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data?.error || 'Não foi possível registar o veto.')
+    if (data?.vote) setCurrentVote(data.vote as RoomVote)
+  }
+
   async function openClue(clue: Clue) {
     if (!clue.opened_at && room && player) {
       await fetch('/api/player-action', {
@@ -349,6 +425,7 @@ export default function GamePage() {
     { id: 'notes', icon: FileText, short: 'TXT', label: 'Notas', count: unreadCount(clues.filter(isTextNote)), accent: 'bg-amber-950/80 border-amber-300/15' },
     { id: 'calls', icon: Phone, short: 'CALL', label: 'Chamadas', count: unreadCount(clues.filter(isAudio)), accent: 'bg-cyan-950/70 border-cyan-300/15' },
     { id: 'browser', icon: Globe2, short: 'WWW', label: 'Browser', count: unreadCount(clues.filter((clue) => clue.clue_type === 'webapp_unlock')), accent: 'bg-zinc-900 border-white/10' },
+    { id: 'veto', icon: Shield, short: 'VETO', label: 'Veto', count: currentVote ? 0 : 1, accent: 'bg-red/80 border-red/30' },
   ]
 
   return (
@@ -414,9 +491,13 @@ export default function GamePage() {
               {activeApp === 'messages' && (
                 <MessagesApp
                   key="messages"
+                  player={player}
+                  players={players}
                   clues={clues}
+                  messages={messages}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
+                  onSendMessage={sendRoomMessage}
                 />
               )}
 
@@ -472,6 +553,17 @@ export default function GamePage() {
                   clues={sortedClues(clues.filter((clue) => clue.clue_type === 'webapp_unlock' || clue.clue_type === 'kairo_appears'))}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
+                />
+              )}
+
+              {activeApp === 'veto' && (
+                <VetoApp
+                  key="veto"
+                  player={player}
+                  players={players}
+                  currentVote={currentVote}
+                  onBack={() => setActiveApp('home')}
+                  onVote={castVeto}
                 />
               )}
 
@@ -586,7 +678,7 @@ function KairoOverlay({ message }: { message: string }) {
     >
       <div className="text-center">
         <div className="mb-4 font-mono text-[10px] tracking-[0.3em] text-red/70">NOVA MENSAGEM</div>
-        <div className="mb-2 font-mono text-xs text-white/30">Kairo Mendes:</div>
+        <div className="mb-2 font-mono text-xs text-white/30">Contacto desconhecido:</div>
         <div className="font-display text-2xl font-black text-white">{message}</div>
         <div className="mt-6 animate-pulse font-mono text-[9px] text-white/20">contacto removido</div>
       </div>
@@ -799,125 +891,399 @@ function Badge({ count }: { count: number }) {
   )
 }
 
-function MessagesApp({ clues, onBack, onOpenClue }: { clues: Clue[]; onBack: () => void; onOpenClue: (clue: Clue) => void }) {
-  const threads = useMemo(() => buildThreads(clues), [clues])
-  const [activeThreadId, setActiveThreadId] = useState<ThreadId>('vertice')
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) || threads[0]
+function MessagesApp({
+  player,
+  players,
+  clues,
+  messages,
+  onBack,
+  onOpenClue,
+  onSendMessage,
+}: {
+  player: Player | null
+  players: Player[]
+  clues: Clue[]
+  messages: RoomMessage[]
+  onBack: () => void
+  onOpenClue: (clue: Clue) => void
+  onSendMessage: (body: string, recipientPlayerId?: string) => Promise<void>
+}) {
+  const chats = useMemo(() => buildPhoneChats(player, players, clues, messages), [player, players, clues, messages])
+  const [activeChatId, setActiveChatId] = useState<ChatId | null>(null)
+  const activeChat = chats.find((chat) => chat.id === activeChatId) || null
+
+  if (activeChat) {
+    return (
+      <PhoneAppView title={activeChat.label} onBack={() => setActiveChatId(null)}>
+        <ChatConversation
+          chat={activeChat}
+          player={player}
+          onOpenClue={onOpenClue}
+          onSendMessage={onSendMessage}
+        />
+      </PhoneAppView>
+    )
+  }
 
   return (
     <PhoneAppView title="Mensagens" onBack={onBack}>
-      <div className="flex h-full flex-col">
-        <div className="shrink-0 space-y-2 border-b border-white/8 p-3">
-          {threads.map((thread) => (
+      <div className="h-full overflow-y-auto p-3">
+        <div className="mb-3 rounded-2xl border border-white/8 bg-black/24 px-3 py-2">
+          <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/28">Conversas disponíveis</div>
+        </div>
+        <div className="space-y-2">
+          {chats.map((chat) => (
             <button
-              key={thread.id}
+              key={chat.id}
               type="button"
-              onClick={() => setActiveThreadId(thread.id)}
-              className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-all ${
-                activeThread.id === thread.id ? 'border-red/35 bg-red/10' : 'border-white/8 bg-black/22'
-              }`}
+              onClick={() => setActiveChatId(chat.id)}
+              className="flex w-full min-h-[58px] items-center gap-3 rounded-2xl border border-white/8 bg-black/24 px-3 py-2 text-left transition-all hover:border-red/25 active:scale-[0.99]"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/7">
-                <thread.icon size={17} />
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                chat.kind === 'vertice' ? 'border-red/30 bg-red/10 text-red' : chat.kind === 'group' ? 'border-emerald-400/20 bg-emerald-900/35 text-emerald-100' : 'border-white/10 bg-white/7 text-white/70'
+              }`}>
+                <chat.icon size={17} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-sans text-xs font-bold text-white">{thread.label}</div>
-                <div className="truncate font-sans text-[11px] text-white/42">{thread.subtitle}</div>
+                <div className="truncate font-sans text-xs font-bold text-white">{chat.label}</div>
+                <div className="mt-0.5 truncate font-sans text-[11px] text-white/42">{chat.subtitle}</div>
               </div>
-              {unreadCount(thread.clues) > 0 && <Badge count={unreadCount(thread.clues)} />}
+              {chat.unread > 0 && <Badge count={chat.unread} />}
             </button>
           ))}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-          {activeThread.clues.length === 0 ? (
-            <EmptyPhoneState icon={MessageCircle} title="Sem mensagens" text="Este contacto ainda não enviou nada." />
-          ) : (
-            <div className="space-y-3">
-              {sortedClues(activeThread.clues, true).map((clue) => (
-                <MessageBubble key={clue.id} clue={clue} thread={activeThread} onOpen={() => onOpenClue(clue)} />
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </PhoneAppView>
   )
 }
 
-function buildThreads(clues: Clue[]): Thread[] {
-  const byThread: Record<ThreadId, Clue[]> = {
-    vertice: [],
-    group: [],
-    kairo: [],
-    system: [],
-  }
-
-  clues.forEach((clue) => {
-    byThread[getThreadId(clue)].push(clue)
-  })
-
-  return [
+function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[], messages: RoomMessage[]): PhoneChat[] {
+  const privateClues = sortedClues(clues.filter(isPrivateClue), true)
+  const groupClues = sortedClues(clues.filter(isGroupClue), true)
+  const groupMessages = messages.filter((message) => !message.recipient_player_id)
+  const latestGroupMessage = [...groupMessages].at(-1)
+  const chats: PhoneChat[] = [
     {
       id: 'vertice',
       label: 'VÉRTICE',
-      subtitle: byThread.vertice[0]?.title || 'Canal privado',
+      subtitle: privateClues.at(-1)?.title || 'Canal privado de pistas',
       icon: Bot,
-      clues: byThread.vertice,
+      kind: 'vertice',
+      clues: privateClues,
+      messages: [],
+      unread: unreadCount(privateClues),
     },
     {
       id: 'group',
       label: 'Grupo da sala',
-      subtitle: byThread.group[0]?.title || 'Mensagens coletivas',
+      subtitle: latestGroupMessage?.body || groupClues.at(-1)?.title || 'Chat coletivo ativo',
       icon: Users,
-      clues: byThread.group,
-    },
-    {
-      id: 'kairo',
-      label: 'Kairo Mendes',
-      subtitle: byThread.kairo[0]?.title || 'Estado desconhecido',
-      icon: Search,
-      clues: byThread.kairo,
-    },
-    {
-      id: 'system',
-      label: 'Sistema',
-      subtitle: byThread.system[0]?.title || 'Alertas e desbloqueios',
-      icon: Lock,
-      clues: byThread.system,
+      kind: 'group',
+      clues: groupClues,
+      messages: groupMessages,
+      unread: unreadCount(groupClues),
     },
   ]
+
+  if (!player) return chats
+
+  players
+    .filter((roomPlayer) => roomPlayer.id !== player.id)
+    .forEach((roomPlayer) => {
+      const directMessages = messages.filter((message) => (
+        (message.sender_player_id === player.id && message.recipient_player_id === roomPlayer.id) ||
+        (message.sender_player_id === roomPlayer.id && message.recipient_player_id === player.id)
+      ))
+      const latest = [...directMessages].at(-1)
+      chats.push({
+        id: `player:${roomPlayer.id}`,
+        label: roomPlayer.name,
+        subtitle: latest?.body || roomPlayer.role_label || 'Conversa privada',
+        icon: MessageCircle,
+        kind: 'player',
+        playerId: roomPlayer.id,
+        clues: [],
+        messages: directMessages,
+        unread: 0,
+      })
+    })
+
+  return chats
 }
 
-function MessageBubble({ clue, thread, onOpen }: { clue: Clue; thread: Thread; onOpen: () => void }) {
-  const text = clueText(clue)
-  const fileName = clueFileName(clue)
+function ChatConversation({
+  chat,
+  player,
+  onOpenClue,
+  onSendMessage,
+}: {
+  chat: PhoneChat
+  player: Player | null
+  onOpenClue: (clue: Clue) => void
+  onSendMessage: (body: string, recipientPlayerId?: string) => Promise<void>
+}) {
+  const entries = useMemo(() => buildChatEntries(chat, player), [chat, player])
+  const canWrite = chat.kind !== 'vertice'
+
   return (
-    <article className="max-w-[88%]">
-      <button
-        type="button"
-        onClick={onOpen}
-        className={`w-full rounded-2xl border px-3 py-2.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.25)] transition-all active:scale-[0.99] ${
-          clue.expired ? 'border-white/8 bg-zinc-900/50 opacity-65' : thread.id === 'kairo' ? 'border-red/35 bg-red/10' : 'border-white/10 bg-zinc-950/82'
-        }`}
-      >
-        <div className="mb-1 flex items-center gap-2">
-          <thread.icon size={13} className={thread.id === 'kairo' ? 'text-red' : 'text-white/50'} />
-          <span className="font-sans text-[11px] font-bold text-white">{thread.label}</span>
-          {!clue.opened_at && !clue.expired && <span className="h-1.5 w-1.5 rounded-full bg-red" />}
-        </div>
-        <h3 className="font-sans text-sm font-bold text-white">{clue.title}</h3>
-        {text && <p className="mt-1 whitespace-pre-line font-sans text-xs leading-relaxed text-white/68">{text}</p>}
-        {fileName && (
-          <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 ${clue.expired ? 'border-white/8 bg-black/20' : 'border-white/10 bg-black/35'}`}>
-            <Paperclip size={14} className="shrink-0 text-white/45" />
-            <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-white/62">{fileName}</span>
-            {clue.expired ? <span className="font-mono text-[9px] text-red/80">expirado</span> : <Download size={14} className="text-white/40" />}
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        {entries.length === 0 ? (
+          <EmptyPhoneState icon={MessageCircle} title="Sem mensagens" text={canWrite ? 'A conversa está vazia. Podes iniciar a troca.' : 'As pistas privadas aparecem aqui.'} />
+        ) : (
+          <div className="space-y-3">
+            {entries.map((entry) => (
+              <ChatBubble key={entry.id} entry={entry} onOpenClue={onOpenClue} />
+            ))}
           </div>
         )}
-        {clue.expires_at && <ExpiryPill clue={clue} />}
-      </button>
+      </div>
+      {canWrite && (
+        <ChatComposer
+          recipientPlayerId={chat.kind === 'player' ? chat.playerId : undefined}
+          onSendMessage={onSendMessage}
+        />
+      )}
+    </div>
+  )
+}
+
+function buildChatEntries(chat: PhoneChat, player: Player | null): ChatEntry[] {
+  const clueEntries: ChatEntry[] = chat.clues.map((clue) => {
+    const body = clueText(clue) || asText(clueContent(clue).caption) || clue.title
+    const isKairo = clue.clue_type === 'kairo_appears'
+    return {
+      id: `clue:${clue.id}`,
+      createdAt: clue.created_at,
+      sender: isKairo ? 'Contacto desconhecido' : 'VÉRTICE',
+      mine: false,
+      body,
+      clue,
+      tone: isKairo ? 'kairo' : clue.clue_type === 'meme' ? 'meme' : 'ai',
+    }
+  })
+
+  const messageEntries: ChatEntry[] = chat.messages.map((message) => ({
+    id: `message:${message.id}`,
+    createdAt: message.created_at,
+    sender: message.sender_name,
+    mine: Boolean(player && message.sender_player_id === player.id),
+    body: message.body,
+    clue: null as Clue | null,
+    tone: message.sender_kind === 'kairo' ? 'kairo' : message.sender_kind === 'ai' ? 'ai' : 'player',
+  }))
+
+  return [...clueEntries, ...messageEntries].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
+function ChatBubble({
+  entry,
+  onOpenClue,
+}: {
+  entry: ChatEntry
+  onOpenClue: (clue: Clue) => void
+}) {
+  const fileName = entry.clue ? clueFileName(entry.clue) : ''
+  const expired = Boolean(entry.clue?.expired)
+  const isSpecial = entry.tone === 'ai' || entry.tone === 'kairo' || entry.tone === 'meme'
+
+  return (
+    <article className={`flex ${entry.mine ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[84%] rounded-2xl border px-3 py-2.5 shadow-[0_12px_28px_rgba(0,0,0,0.25)] ${
+        entry.mine
+          ? 'border-emerald-400/20 bg-emerald-950/65'
+          : expired
+            ? 'border-white/8 bg-zinc-900/50 opacity-65'
+            : isSpecial
+              ? 'border-red/30 bg-red/10'
+              : 'border-white/10 bg-zinc-950/82'
+      }`}>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <span className={`font-sans text-[11px] font-bold ${isSpecial ? 'text-red/80' : 'text-white/65'}`}>{entry.mine ? 'Tu' : entry.sender}</span>
+          <span className="font-mono text-[9px] text-white/24">{formatMessageTime(entry.createdAt)}</span>
+        </div>
+        {entry.body && <p className="whitespace-pre-line font-sans text-xs leading-relaxed text-white/74">{entry.body}</p>}
+        {entry.clue && fileName && (
+          <button
+            type="button"
+            disabled={expired}
+            onClick={() => onOpenClue(entry.clue as Clue)}
+            className={`mt-3 flex w-full min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-left transition-all ${
+              expired ? 'border-white/8 bg-black/20 text-white/30' : 'border-white/12 bg-black/35 text-white/70 active:scale-[0.99]'
+            }`}
+          >
+            <Paperclip size={14} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate font-mono text-[10px]">{fileName}</span>
+            {expired ? <span className="font-mono text-[9px] text-red/80">expirado</span> : <Eye size={14} />}
+          </button>
+        )}
+        {entry.clue?.expires_at && <ExpiryPill clue={entry.clue} />}
+      </div>
     </article>
+  )
+}
+
+function ChatComposer({
+  recipientPlayerId,
+  onSendMessage,
+}: {
+  recipientPlayerId?: string
+  onSendMessage: (body: string, recipientPlayerId?: string) => Promise<void>
+}) {
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    const cleanBody = body.trim()
+    if (!cleanBody || sending) return
+    setSending(true)
+    setError('')
+    try {
+      await onSendMessage(cleanBody, recipientPlayerId)
+      setBody('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao enviar.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="shrink-0 border-t border-white/8 bg-black/35 p-3">
+      {error && <div className="mb-2 rounded-xl border border-red/30 bg-red/10 px-3 py-2 font-sans text-[11px] text-red/80">{error}</div>}
+      <div className="flex items-end gap-2">
+        <textarea
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              void submit()
+            }
+          }}
+          rows={1}
+          maxLength={700}
+          placeholder="Escrever mensagem..."
+          className="min-h-[44px] flex-1 resize-none rounded-2xl border border-white/10 bg-black/45 px-3 py-3 font-sans text-xs text-white outline-none transition-colors placeholder:text-white/24 focus:border-red/40"
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={!body.trim() || sending}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red/35 bg-red/85 text-white transition-all disabled:cursor-not-allowed disabled:opacity-35 active:scale-95"
+          aria-label="Enviar mensagem"
+        >
+          <Send size={17} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function VetoApp({
+  player,
+  players,
+  currentVote,
+  onBack,
+  onVote,
+}: {
+  player: Player | null
+  players: Player[]
+  currentVote: RoomVote | null
+  onBack: () => void
+  onVote: (suspectPlayerId: string, reason: string) => Promise<void>
+}) {
+  const availablePlayers = players.filter((roomPlayer) => roomPlayer.id !== player?.id)
+  const votedPlayer = currentVote ? players.find((roomPlayer) => roomPlayer.id === currentVote.suspect_player_id) : null
+  const [selectedId, setSelectedId] = useState(currentVote?.suspect_player_id || '')
+  const [reason, setReason] = useState(currentVote?.reason || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!selectedId || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      await onVote(selectedId, reason)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível registar o veto.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <PhoneAppView title="Veto secreto" onBack={onBack}>
+      <div className="h-full overflow-y-auto p-4">
+        <div className="mb-4 rounded-2xl border border-red/25 bg-red/10 p-4">
+          <div className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-red/70">
+            <Shield size={14} />
+            Votação invisível
+          </div>
+          <p className="font-sans text-xs leading-relaxed text-white/62">
+            Escolhe quem achas que está a manipular o grupo. O voto não aparece no chat e só será revelado no pós-jogo.
+          </p>
+        </div>
+
+        {votedPlayer && (
+          <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-950/30 p-4">
+            <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-emerald-200/70">Voto registado</div>
+            <div className="mt-1 font-sans text-sm font-bold text-white">{votedPlayer.name}</div>
+            <div className="mt-0.5 font-mono text-[10px] text-white/32">{votedPlayer.role_label}</div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {availablePlayers.map((roomPlayer) => {
+            const selected = selectedId === roomPlayer.id
+            return (
+              <button
+                key={roomPlayer.id}
+                type="button"
+                onClick={() => setSelectedId(roomPlayer.id)}
+                className={`flex w-full min-h-[56px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.99] ${
+                  selected ? 'border-red/45 bg-red/12' : 'border-white/8 bg-black/24 hover:border-red/24'
+                }`}
+              >
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${selected ? 'border-red/35 bg-red/15 text-red' : 'border-white/10 bg-white/7 text-white/50'}`}>
+                  <Users size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-sans text-xs font-bold text-white">{roomPlayer.name}</div>
+                  <div className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{roomPlayer.role_label}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <label className="mt-4 block">
+          <span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.22em] text-white/28">Motivo opcional</span>
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            maxLength={240}
+            rows={3}
+            placeholder="O que te fez suspeitar?"
+            className="w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-3 py-3 font-sans text-xs text-white outline-none placeholder:text-white/24 focus:border-red/40"
+          />
+        </label>
+
+        {error && <div className="mt-3 rounded-2xl border border-red/30 bg-red/10 p-3 font-sans text-xs text-red/80">{error}</div>}
+
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={!selectedId || saving}
+          className="mt-4 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-red/45 bg-red/85 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-white transition-all disabled:cursor-not-allowed disabled:opacity-35 active:scale-[0.99]"
+        >
+          <Shield size={15} />
+          {currentVote ? 'Atualizar veto' : 'Registar veto'}
+        </button>
+      </div>
+    </PhoneAppView>
   )
 }
 
@@ -1003,9 +1369,28 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
         )}
 
         {isPhoto(clue) && canOpenFile && (
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="mb-4 block overflow-hidden rounded-2xl border border-white/10 bg-black">
+          <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
             <img src={fileUrl} alt={clue.title} className="max-h-[46vh] w-full object-contain" />
-          </a>
+          </div>
+        )}
+
+        {isDocument(clue) && isPdfFile(clue) && canOpenFile && (
+          <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+            <iframe src={fileUrl} title={clue.title} className="h-[52vh] w-full bg-zinc-950" />
+          </div>
+        )}
+
+        {isAudio(clue) && canOpenFile && (
+          <div className="mb-4 rounded-2xl border border-white/10 bg-black/35 p-4">
+            <div className="mb-3 font-mono text-[9px] tracking-[0.24em] text-white/35">ÁUDIO INTERNO</div>
+            <audio src={fileUrl} controls className="w-full" />
+          </div>
+        )}
+
+        {isVideoFile(clue) && canOpenFile && (
+          <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+            <video src={fileUrl} controls playsInline className="max-h-[52vh] w-full bg-black" />
+          </div>
         )}
 
         {isPhoto(clue) && !canOpenFile && fileName && (
@@ -1038,16 +1423,14 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
           </div>
         )}
 
-        {canOpenFile && (
-          <a
-            href={fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red/50 bg-red/10 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white transition-colors hover:bg-red"
-          >
-            <Download size={16} />
-            Abrir ficheiro
-          </a>
+        {canOpenFile && !isPhoto(clue) && !isPdfFile(clue) && !isAudio(clue) && !isVideoFile(clue) && (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/28 p-4">
+            <div className="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/35">
+              <Paperclip size={14} />
+              Anexo interno
+            </div>
+            <div className="truncate font-mono text-[10px] text-white/50">{fileName || 'ficheiro'}</div>
+          </div>
         )}
 
         {clue.expires_at && <ExpiryTimer clue={clue} />}

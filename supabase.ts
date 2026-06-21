@@ -23,6 +23,8 @@ export type Database = {
       rankings: { Row: Ranking; Insert: Partial<Ranking>; Update: Partial<Ranking> }
       clues: { Row: Clue; Insert: Partial<Clue>; Update: Partial<Clue> }
       game_events: { Row: GameEvent; Insert: Partial<GameEvent>; Update: Partial<GameEvent> }
+      room_messages: { Row: RoomMessage; Insert: Partial<RoomMessage>; Update: Partial<RoomMessage> }
+      room_votes: { Row: RoomVote; Insert: Partial<RoomVote>; Update: Partial<RoomVote> }
     }
   }
 }
@@ -50,6 +52,19 @@ export interface Player {
   postgame_eligible: boolean; joined_at: string
 }
 
+export interface RoomMessage {
+  id: string; room_id: string; event_id: string | null
+  sender_player_id: string | null; recipient_player_id: string | null
+  sender_kind: 'player' | 'ai' | 'system' | 'kairo'
+  sender_name: string; message_type: 'text' | 'ai' | 'system' | 'meme' | 'kairo' | 'attachment'
+  body: string; metadata: Record<string, unknown>; created_at: string
+}
+
+export interface RoomVote {
+  id: string; room_id: string; voter_player_id: string; suspect_player_id: string
+  reason: string | null; created_at: string; updated_at: string
+}
+
 export interface Payment {
   id: string; room_id: string; payer_name: string; payer_whatsapp: string
   archive_title: string; num_players: number; amount: number
@@ -75,6 +90,7 @@ export interface Ranking {
 
 export interface RankingPlayer {
   id: string; name: string; role: string; score: number; rank: number
+  score_details?: Record<string, unknown>; votes_received?: number; veto_target_name?: string | null
 }
 
 export interface Clue {

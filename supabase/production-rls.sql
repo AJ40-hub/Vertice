@@ -31,6 +31,8 @@ alter table if exists public.rankings enable row level security;
 alter table if exists public.clues enable row level security;
 alter table if exists public.game_events enable row level security;
 alter table if exists public.assets enable row level security;
+alter table if exists public.room_messages enable row level security;
+alter table if exists public.room_votes enable row level security;
 
 revoke all on table public.archives from anon, authenticated;
 revoke all on table public.rooms from anon, authenticated;
@@ -42,6 +44,8 @@ revoke all on table public.rankings from anon, authenticated;
 revoke all on table public.clues from anon, authenticated;
 revoke all on table public.game_events from anon, authenticated;
 revoke all on table public.assets from anon, authenticated;
+revoke all on table public.room_messages from anon, authenticated;
+revoke all on table public.room_votes from anon, authenticated;
 
 do $$
 declare
@@ -53,7 +57,8 @@ begin
     where schemaname = 'public'
       and tablename in (
         'archives', 'rooms', 'players', 'payments', 'prizes',
-        'notifications', 'rankings', 'clues', 'game_events', 'assets'
+        'notifications', 'rankings', 'clues', 'game_events', 'assets',
+        'room_messages', 'room_votes'
       )
   loop
     execute format('drop policy if exists %I on %I.%I', policy.policyname, policy.schemaname, policy.tablename);
@@ -71,6 +76,8 @@ drop policy if exists "anon_select_rankings" on public.rankings;
 drop policy if exists "anon_select_clues" on public.clues;
 drop policy if exists "anon_select_game_events" on public.game_events;
 drop policy if exists "anon_select_assets" on public.assets;
+drop policy if exists "anon_select_room_messages" on public.room_messages;
+drop policy if exists "anon_select_room_votes" on public.room_votes;
 
 drop policy if exists "anon_insert_archives" on public.archives;
 drop policy if exists "anon_insert_rooms" on public.rooms;
@@ -82,6 +89,8 @@ drop policy if exists "anon_insert_rankings" on public.rankings;
 drop policy if exists "anon_insert_clues" on public.clues;
 drop policy if exists "anon_insert_game_events" on public.game_events;
 drop policy if exists "anon_insert_assets" on public.assets;
+drop policy if exists "anon_insert_room_messages" on public.room_messages;
+drop policy if exists "anon_insert_room_votes" on public.room_votes;
 
 drop policy if exists "anon_update_archives" on public.archives;
 drop policy if exists "anon_update_rooms" on public.rooms;
@@ -93,6 +102,8 @@ drop policy if exists "anon_update_rankings" on public.rankings;
 drop policy if exists "anon_update_clues" on public.clues;
 drop policy if exists "anon_update_game_events" on public.game_events;
 drop policy if exists "anon_update_assets" on public.assets;
+drop policy if exists "anon_update_room_messages" on public.room_messages;
+drop policy if exists "anon_update_room_votes" on public.room_votes;
 
 drop policy if exists "anon_delete_archives" on public.archives;
 drop policy if exists "anon_delete_rooms" on public.rooms;
@@ -104,5 +115,7 @@ drop policy if exists "anon_delete_rankings" on public.rankings;
 drop policy if exists "anon_delete_clues" on public.clues;
 drop policy if exists "anon_delete_game_events" on public.game_events;
 drop policy if exists "anon_delete_assets" on public.assets;
+drop policy if exists "anon_delete_room_messages" on public.room_messages;
+drop policy if exists "anon_delete_room_votes" on public.room_votes;
 
 commit;

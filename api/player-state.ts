@@ -12,6 +12,7 @@ function publicPlayer(player: any) {
     role_label: player.role_label,
     is_host: player.is_host,
     score: player.score,
+    score_details: player.score_details || {},
     postgame_eligible: player.postgame_eligible,
     joined_at: player.joined_at,
   }
@@ -62,21 +63,40 @@ export default async function handler(req: any, res: any) {
 
     if (!player) return res.status(403).json({ error: 'Player does not belong to this room' })
 
-    const [{ data: room }, { data: players }, { data: clues }] = await Promise.all([
+    const [
+      { data: room },
+      { data: players },
+      { data: clues },
+      { data: groupMessages },
+      { data: sentPrivateMessages },
+      { data: receivedPrivateMessages },
+      { data: currentVote },
+    ] = await Promise.all([
       supabase.from('rooms').select('*, archives(title, subtitle, duration_minutes)').eq('id', roomId).single(),
       supabase.from('players').select('*').eq('room_id', roomId).order('joined_at'),
       supabase.from('clues').select('*').eq('room_id', roomId).eq('player_id', playerId).order('created_at', { ascending: false }),
+      supabase.from('room_messages').select('*').eq('room_id', roomId).is('recipient_player_id', null).order('created_at', { ascending: true }),
+      supabase.from('room_messages').select('*').eq('room_id', roomId).eq('sender_player_id', playerId).not('recipient_player_id', 'is', null).order('created_at', { ascending: true }),
+      supabase.from('room_messages').select('*').eq('room_id', roomId).eq('recipient_player_id', playerId).order('created_at', { ascending: true }),
+      supabase.from('room_votes').select('*').eq('room_id', roomId).eq('voter_player_id', playerId).maybeSingle(),
     ])
 
     if (!room) return res.status(404).json({ error: 'Room not found' })
 
     const signedClues = await signClueFiles(supabase, clues || [])
+    const messagesById = new Map<string, any>()
+    ;[...(groupMessages || []), ...(sentPrivateMessages || []), ...(receivedPrivateMessages || [])].forEach((message) => {
+      messagesById.set(message.id, message)
+    })
+    const messages = [...messagesById.values()].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
     return res.status(200).json({
       room,
       player,
       players: (players || []).map(publicPlayer),
       clues: signedClues,
+      messages,
+      currentVote: currentVote || null,
     })
   } catch (error) {
     console.error('player-state endpoint error:', error)

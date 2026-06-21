@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useGameStore } from './gameStore'
 import { adminApi } from './adminApi'
-import type { Room, Player, Clue, Notification } from './supabase'
+import type { Room, Player, Clue, Notification, RoomMessage, RoomVote } from './supabase'
 
 async function fetchPlayerState(roomId: string, playerId: string) {
   const response = await fetch('/api/player-state', {
@@ -10,11 +10,11 @@ async function fetchPlayerState(roomId: string, playerId: string) {
     body: JSON.stringify({ room_id: roomId, player_id: playerId }),
   })
   if (!response.ok) return null
-  return response.json() as Promise<{ room: Room; player: Player; players: Player[]; clues: Clue[] }>
+  return response.json() as Promise<{ room: Room; player: Player; players: Player[]; clues: Clue[]; messages: RoomMessage[]; currentVote: RoomVote | null }>
 }
 
 export function useRoomRealtime(roomId: string | undefined) {
-  const { setRoom, setPlayer, setClues, player } = useGameStore()
+  const { setRoom, setPlayer, setPlayers, setClues, setMessages, setCurrentVote, player } = useGameStore()
 
   useEffect(() => {
     if (!roomId || !player?.id) return
@@ -27,7 +27,10 @@ export function useRoomRealtime(roomId: string | undefined) {
       if (!state || cancelled) return
       setRoom(state.room)
       setPlayer(state.player)
+      setPlayers(state.players)
       setClues(state.clues)
+      setMessages(state.messages || [])
+      setCurrentVote(state.currentVote || null)
     }
 
     refresh()
@@ -36,7 +39,7 @@ export function useRoomRealtime(roomId: string | undefined) {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [roomId, player?.id, setRoom, setPlayer, setClues])
+  }, [roomId, player?.id, setRoom, setPlayer, setPlayers, setClues, setMessages, setCurrentVote])
 }
 
 export function useAdminRealtime(onNotification: (n: unknown) => void) {

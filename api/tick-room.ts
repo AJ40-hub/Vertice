@@ -18,6 +18,46 @@ function getTargetPlayers(target: string, players: any[]) {
   return players.filter((p) => p.role === roleMap[target])
 }
 
+function groupMessageForEvent(event: any) {
+  const content = event.content || {}
+  const text = typeof content.text === 'string'
+    ? content.text
+    : typeof content.caption === 'string'
+      ? content.caption
+      : typeof content.title === 'string'
+        ? content.title
+        : ''
+
+  if (event.event_type === 'ia_message') {
+    return {
+      sender_kind: 'ai',
+      sender_name: 'VÉRTICE',
+      message_type: 'ai',
+      body: text,
+    }
+  }
+
+  if (event.event_type === 'meme') {
+    return {
+      sender_kind: 'ai',
+      sender_name: 'VÉRTICE',
+      message_type: 'meme',
+      body: text || 'A IA enviou um meme.',
+    }
+  }
+
+  if (event.event_type === 'kairo_appears') {
+    return {
+      sender_kind: 'kairo',
+      sender_name: 'Contacto desconhecido',
+      message_type: 'kairo',
+      body: text || '...',
+    }
+  }
+
+  return null
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -63,6 +103,21 @@ export default async function handler(req: any, res: any) {
         .single()
 
       if (!updatedEvent) continue
+
+      const groupMessage = groupMessageForEvent(updatedEvent)
+      if (groupMessage) {
+        await supabase.from('room_messages').insert({
+          room_id: roomId,
+          event_id: updatedEvent.id,
+          recipient_player_id: null,
+          sender_player_id: null,
+          sender_kind: groupMessage.sender_kind,
+          sender_name: groupMessage.sender_name,
+          message_type: groupMessage.message_type,
+          body: groupMessage.body,
+          metadata: updatedEvent.content || {},
+        })
+      }
 
       const targetPlayers = getTargetPlayers(event.target, players)
       if (targetPlayers.length > 0) {

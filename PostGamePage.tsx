@@ -4,11 +4,20 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useGameStore } from './gameStore'
 import type { Player, Ranking } from './supabase'
 
+type MostSuspected = {
+  id: string
+  name: string
+  role: string | null
+  role_label: string | null
+  vote_count: number
+}
+
 export default function PostGamePage() {
   const navigate = useNavigate()
   const { room, player, clearGame } = useGameStore()
-  const [, setRanking] = useState<Ranking | null>(null)
+  const [ranking, setRanking] = useState<Ranking | null>(null)
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [mostSuspected, setMostSuspected] = useState<MostSuspected | null>(null)
   const [phase, setPhase] = useState<'loading' | 'postgame' | 'ranking'>('loading')
   const [isPostgameEligible, setIsPostgameEligible] = useState(false)
   const [videoShown, setVideoShown] = useState(false)
@@ -42,6 +51,7 @@ export default function PostGamePage() {
 
     setAllPlayers(data.players as Player[])
     setRanking(data.ranking as Ranking)
+    setMostSuspected((data.most_suspected || null) as MostSuspected | null)
 
     // Show postgame for eligible players first, then ranking
     if (player?.postgame_eligible) {
@@ -156,6 +166,29 @@ export default function PostGamePage() {
                 <h1 className="font-display text-4xl font-black">Ranking Final</h1>
               </div>
 
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="mb-6 border border-red/25 bg-red/5 p-5"
+              >
+                <div className="mb-2 font-mono text-[10px] tracking-[0.32em] text-red/70">VETO SECRETO DO GRUPO</div>
+                {mostSuspected ? (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="truncate font-display text-2xl font-black text-white">{mostSuspected.name}</div>
+                      <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/32">{mostSuspected.role_label || 'Papel desconhecido'}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-display text-3xl font-black text-red">{mostSuspected.vote_count}</div>
+                      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/28">votos</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="font-sans text-sm leading-relaxed text-white/50">Ninguém registou voto secreto nesta sessão.</p>
+                )}
+              </motion.div>
+
               {/* Winner highlight */}
               {allPlayers[0] && (
                 <motion.div
@@ -181,35 +214,46 @@ export default function PostGamePage() {
 
               {/* Full ranking */}
               <div className="space-y-2 mb-10">
-                {allPlayers.map((p, i) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + i * 0.1 }}
-                    className={`flex items-center gap-4 p-4 border transition-all ${
-                      i === 0 ? 'border-amber/30 bg-amber/5' :
-                      p.id === player?.id ? 'border-red/20 bg-red/5' :
-                      'border-white/5 bg-surface/50'
-                    }`}
-                  >
-                    <div className={`font-display text-2xl font-black w-8 text-center ${i === 0 ? 'text-amber' : 'text-white/20'}`}>
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-sans font-bold text-sm">{p.name}</span>
-                        {p.id === player?.id && <span className="font-mono text-[9px] text-red/50 border border-red/20 px-1.5">TU</span>}
-                        {p.is_host && <span className="font-mono text-[9px] text-white/20 border border-white/10 px-1.5">HOST</span>}
+                {allPlayers.map((p, i) => {
+                  const details = p.score_details || {}
+                  const messages = Number(details.messagesSent ?? details.messages_sent ?? 0)
+                  const votesReceived = Number(details.votesReceived ?? details.votes_received ?? 0)
+                  const vetoTarget = String(details.veto_target_name || '')
+                  return (
+                    <motion.div
+                      key={p.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 + i * 0.1 }}
+                      className={`flex items-center gap-4 p-4 border transition-all ${
+                        i === 0 ? 'border-amber/30 bg-amber/5' :
+                        p.id === player?.id ? 'border-red/20 bg-red/5' :
+                        'border-white/5 bg-surface/50'
+                      }`}
+                    >
+                      <div className={`font-display text-2xl font-black w-8 text-center ${i === 0 ? 'text-amber' : 'text-white/20'}`}>
+                        {i + 1}
                       </div>
-                      <div className="font-mono text-[10px] text-white/30 mt-0.5">{p.role_label}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-display text-xl font-black">{p.score}</div>
-                      <div className="font-mono text-[9px] text-white/20">pts</div>
-                    </div>
-                  </motion.div>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-sans font-bold text-sm">{p.name}</span>
+                          {p.id === player?.id && <span className="font-mono text-[9px] text-red/50 border border-red/20 px-1.5">TU</span>}
+                          {p.is_host && <span className="font-mono text-[9px] text-white/20 border border-white/10 px-1.5">HOST</span>}
+                        </div>
+                        <div className="font-mono text-[10px] text-white/30 mt-0.5">{p.role_label}</div>
+                        <div className="mt-2 flex flex-wrap gap-2 font-mono text-[9px] text-white/28">
+                          <span>{messages} msg</span>
+                          <span>{votesReceived} votos recebidos</span>
+                          {vetoTarget && <span>votou: {vetoTarget}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-display text-xl font-black">{p.score}</div>
+                        <div className="font-mono text-[9px] text-white/20">pts</div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
               </div>
 
               {/* Winner message */}
@@ -234,6 +278,11 @@ export default function PostGamePage() {
                 <button onClick={() => { clearGame(); navigate('/') }} className="btn-ghost">
                   Voltar ao Início
                 </button>
+                {ranking && (
+                  <div className="mt-4 font-mono text-[9px] uppercase tracking-[0.2em] text-white/16">
+                    Relatório {ranking.id.slice(0, 8)}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

@@ -109,28 +109,72 @@ export const ARQUIVO01_EVENTS = [
     content: { text: 'O que viste no grupo… era apenas a ponta.\nPrepara-te. Isto não acabou.', videoUrl: '/postgame-video.mp4', isPostgame: true }},
 ]
 
+type ScoreContext = {
+  messagesSent?: number
+  groupMessagesSent?: number
+  privateMessagesSent?: number
+  vetoCast?: boolean
+  vetoTargetRole?: string | null
+  votesReceived?: number
+}
+
 // ── SCORING ENGINE ────────────────────────────────────────────
-export function calculateScore(player: Player, elapsedSeconds: number): number {
-  let score = 0
-
-  // Pistas abertas a tempo
-  score += (player.score_details?.clues_opened as number || 0) * 15
-
-  // Cooperação (começa em 50)
-  score += Math.max(0, player.state_cooperation - 50) * 2
-
-  // Pressão resistida
-  score += Math.max(0, 100 - player.state_pressure) / 2
-
-  // Escolha de traição (revelar = +30, guardar = +10)
-  if (player.betrayal_choice === 'reveal') score += 30
-  if (player.betrayal_choice === 'keep') score += 10
-
-  // Tempo no jogo
+export function calculateScoreDetails(player: Player, elapsedSeconds: number, context: ScoreContext = {}) {
+  const details = player.score_details || {}
+  const cluesOpened = Number(details.clues_opened || 0)
+  const messagesSent = Number(context.messagesSent ?? details.messages_sent ?? 0)
+  const groupMessagesSent = Number(context.groupMessagesSent ?? details.group_messages_sent ?? 0)
+  const privateMessagesSent = Number(context.privateMessagesSent ?? details.private_messages_sent ?? 0)
+  const vetoCast = Boolean(context.vetoCast ?? details.veto_cast)
+  const vetoTargetRole = String(context.vetoTargetRole || details.veto_target_role || '')
+  const votesReceived = Number(context.votesReceived || 0)
   const minutesPlayed = elapsedSeconds / 60
-  score += Math.min(minutesPlayed * 0.5, 30)
 
-  return Math.round(score)
+  const clueScore = Math.min(cluesOpened * 15, 90)
+  const participationScore = Math.min(messagesSent * 3 + groupMessagesSent * 2 + privateMessagesSent, 45)
+  const cooperationScore = Math.max(0, player.state_cooperation - 50) * 1.2
+  const pressureScore = Math.max(0, 100 - player.state_pressure) * 0.35
+  const vetoScore = vetoCast ? 15 : 0
+  const accuracyScore = ['hacker', 'inimigo'].includes(vetoTargetRole) ? 25 : 0
+  const betrayalScore = player.betrayal_choice === 'reveal' ? 25 : player.betrayal_choice === 'keep' ? 10 : 0
+  const enduranceScore = Math.min(minutesPlayed * 0.4, 30)
+  const deductionForSuspicion = Math.min(votesReceived * 3, 18)
+
+  const score = Math.max(0, Math.round(
+    clueScore +
+    participationScore +
+    cooperationScore +
+    pressureScore +
+    vetoScore +
+    accuracyScore +
+    betrayalScore +
+    enduranceScore -
+    deductionForSuspicion
+  ))
+
+  return {
+    score,
+    clueScore: Math.round(clueScore),
+    participationScore: Math.round(participationScore),
+    cooperationScore: Math.round(cooperationScore),
+    pressureScore: Math.round(pressureScore),
+    vetoScore,
+    accuracyScore,
+    betrayalScore,
+    enduranceScore: Math.round(enduranceScore),
+    deductionForSuspicion,
+    cluesOpened,
+    messagesSent,
+    groupMessagesSent,
+    privateMessagesSent,
+    votesReceived,
+    vetoCast,
+    vetoTargetRole: vetoTargetRole || null,
+  }
+}
+
+export function calculateScore(player: Player, elapsedSeconds: number, context: ScoreContext = {}): number {
+  return calculateScoreDetails(player, elapsedSeconds, context).score
 }
 
 // ── ROOM CODE GENERATOR ───────────────────────────────────────

@@ -1,6 +1,6 @@
 import { requireAdmin, verifyAdminSession } from './_lib/_adminAuth.js'
 import { getSupabaseAdmin } from './_lib/_supabaseAdmin.js'
-import { calculateScore } from '../gameEngine.js'
+import { calculateScoreDetails } from '../gameEngine.js'
 
 function elapsedSecondsForRoom(room: any) {
   if (!room.started_at) return 0
@@ -18,9 +18,14 @@ function publicPlayer(player: any) {
     role_label: player.role_label,
     is_host: player.is_host,
     score: player.score,
+    score_details: player.score_details,
     postgame_eligible: player.postgame_eligible,
     joined_at: player.joined_at,
   }
+}
+
+function safeScoreDetails(player: any) {
+  return player.score_details && typeof player.score_details === 'object' ? player.score_details : {}
 }
 
 async function ensureFinishNotification(supabase: any, room: any, archive: { title?: string; subtitle?: string } | null, manualBeforeStart: boolean) {
@@ -113,15 +118,75 @@ export default async function handler(req: any, res: any) {
       })
     }
 
-    const scoredPlayers = await Promise.all(players.map(async (player) => {
-      const score = calculateScore(player, finalElapsedSeconds)
+    const [{ data: roomMessages }, { data: roomVotes }] = await Promise.all([
+      supabase.from('room_messages').select('*').eq('room_id', roomId),
+      supabase.from('room_votes').select('*').eq('room_id', roomId),
+    ])
+
+    const playerById = new Map(players.map((roomPlayer: any) => [roomPlayer.id, roomPlayer]))
+    const messageStats = new Map<string, { messagesSent: number; groupMessagesSent: number; privateMessagesSent: number }>()
+    const votesReceivedByPlayer = new Map<string, number>()
+    const voteByVoter = new Map<string, any>()
+
+    ;(roomMessages || []).forEach((message: any) => {
+      if (!message.sender_player_id) return
+      const current = messageStats.get(message.sender_player_id) || {
+        messagesSent: 0,
+        groupMessagesSent: 0,
+        privateMessagesSent: 0,
+      }
+      current.messagesSent += 1
+      if (message.recipient_player_id) current.privateMessagesSent += 1
+      else current.groupMessagesSent += 1
+      messageStats.set(message.sender_player_id, current)
+    })
+
+    ;(roomVotes || []).forEach((vote: any) => {
+      voteByVoter.set(vote.voter_player_id, vote)
+      votesReceivedByPlayer.set(vote.suspect_player_id, (votesReceivedByPlayer.get(vote.suspect_player_id) || 0) + 1)
+    })
+
+    const mostSuspectedEntry = [...votesReceivedByPlayer.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .at(0)
+    const mostSuspectedPlayer = mostSuspectedEntry ? playerById.get(mostSuspectedEntry[0]) : null
+    const mostSuspected = mostSuspectedPlayer ? {
+      id: mostSuspectedPlayer.id,
+      name: mostSuspectedPlayer.name,
+      role: mostSuspectedPlayer.role,
+      role_label: mostSuspectedPlayer.role_label,
+      vote_count: mostSuspectedEntry?.[1] || 0,
+    } : null
+
+    const scoredPlayers = await Promise.all(players.map(async (player: any) => {
+      const stats = messageStats.get(player.id) || {
+        messagesSent: 0,
+        groupMessagesSent: 0,
+        privateMessagesSent: 0,
+      }
+      const vote = voteByVoter.get(player.id)
+      const votedPlayer = vote ? playerById.get(vote.suspect_player_id) : null
+      const votesReceived = votesReceivedByPlayer.get(player.id) || 0
+      const details = calculateScoreDetails(player, finalElapsedSeconds, {
+        ...stats,
+        vetoCast: Boolean(vote),
+        vetoTargetRole: votedPlayer?.role || null,
+        votesReceived,
+      })
+      const scoreDetails = {
+        ...safeScoreDetails(player),
+        ...details,
+        votes_received: votesReceived,
+        veto_target_name: votedPlayer?.name || null,
+        veto_target_id: votedPlayer?.id || null,
+      }
       const { data: updatedPlayer } = await supabase
         .from('players')
-        .update({ score })
+        .update({ score: details.score, score_details: scoreDetails })
         .eq('id', player.id)
         .select()
         .single()
-      return updatedPlayer || { ...player, score }
+      return updatedPlayer || { ...player, score: details.score, score_details: scoreDetails }
     }))
 
     const sortedPlayers = scoredPlayers.sort((a, b) => (b.score || 0) - (a.score || 0))
@@ -137,6 +202,9 @@ export default async function handler(req: any, res: any) {
         role: player.role_label,
         score: player.score,
         rank: index + 1,
+        score_details: player.score_details,
+        votes_received: votesReceivedByPlayer.get(player.id) || 0,
+        veto_target_name: player.score_details?.veto_target_name || null,
       }))
 
       const { data: newRanking, error: rankingErr } = await supabase.from('rankings').insert({
@@ -202,7 +270,7 @@ export default async function handler(req: any, res: any) {
       ])
     }
 
-    return res.status(200).json({ room: finishedRoom, ranking, players: sortedPlayers.map(publicPlayer) })
+    return res.status(200).json({ room: finishedRoom, ranking, players: sortedPlayers.map(publicPlayer), most_suspected: mostSuspected })
   } catch (error) {
     console.error('finish-room endpoint error:', error)
     return res.status(500).json({ error: 'Unexpected server error' })
