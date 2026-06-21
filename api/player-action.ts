@@ -12,6 +12,22 @@ function scoreDetails(player: any) {
   return player.score_details && typeof player.score_details === 'object' ? player.score_details : {}
 }
 
+const roleTargets: Record<string, string> = {
+  detetive: 'A',
+  amigo: 'B',
+  jornalista: 'C',
+  hacker: 'D',
+  inimigo: 'E',
+  testemunha: 'F',
+  familiar: 'G',
+  fa: 'H',
+}
+
+function publicPlayerName(player: any) {
+  const target = player.role ? roleTargets[player.role] : ''
+  return target ? `${player.name} (${target})` : player.name
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -57,12 +73,11 @@ export default async function handler(req: any, res: any) {
         sender_player_id: playerId,
         recipient_player_id: recipientPlayerId,
         sender_kind: 'player',
-        sender_name: player.name,
+        sender_name: publicPlayerName(player),
         message_type: 'text',
         body,
         metadata: {
-          role: player.role,
-          role_label: player.role_label,
+          role_target: player.role ? roleTargets[player.role] || null : null,
         },
       }).select().single()
 

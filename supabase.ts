@@ -46,6 +46,7 @@ export interface Room {
 export interface Player {
   id: string; room_id: string; name: string; gender: string; whatsapp: string
   role: string | null; role_label: string | null; is_host: boolean
+  role_target?: string | null; public_name?: string
   state_suspicion: number; state_cooperation: number; state_pressure: number
   betrayal_choice: 'reveal' | 'keep' | null; betrayal_at: string | null
   score: number; score_details: Record<string, unknown>

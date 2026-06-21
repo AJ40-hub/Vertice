@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -7,11 +7,12 @@ import {
   Bell,
   Bot,
   Clock3,
+  Download,
   Eye,
   FileText,
+  FolderOpen,
   Globe2,
   Image as ImageIcon,
-  Mail,
   MessageCircle,
   Paperclip,
   Phone,
@@ -23,12 +24,12 @@ import {
   Wifi,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useGameStore } from './gameStore'
+import { useGameStore, type SavedPhoneFile } from './gameStore'
 import { useRoomRealtime } from './useRealtime'
 import { deliverPendingEvents } from './gameEngine'
 import type { Clue, Player, Room, RoomMessage, RoomVote } from './supabase'
 
-type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'veto' | 'clue'
+type AppView = 'home' | 'messages' | 'gallery' | 'email' | 'notes' | 'calls' | 'browser' | 'veto' | 'clue' | 'saved-file'
 type DeviceVariant = 'ios' | 'android'
 type ChatId = 'vertice' | 'group' | `player:${string}`
 type ChatKind = 'vertice' | 'group' | 'player'
@@ -52,6 +53,15 @@ type PhoneChat = {
   clues: Clue[]
   messages: RoomMessage[]
   unread: number
+  latestAt: string
+}
+
+type PhoneNotification = {
+  id: string
+  title: string
+  body: string
+  chatId?: ChatId
+  clue?: Clue
 }
 
 type ChatEntry = {
@@ -187,6 +197,62 @@ function formatMessageTime(value: string) {
   return new Date(value).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
 }
 
+function fileTypeForClue(clue: Clue): SavedPhoneFile['fileType'] {
+  if (isPhoto(clue)) return 'photo'
+  if (isAudio(clue)) return 'audio'
+  if (isVideoFile(clue)) return 'video'
+  if (isPdfFile(clue)) return 'pdf'
+  return 'file'
+}
+
+function roleTarget(player: Player | null | undefined) {
+  return player?.role_target || null
+}
+
+function playerDisplayName(player: Player) {
+  return player.public_name || (roleTarget(player) ? `${player.name} (${roleTarget(player)})` : player.name)
+}
+
+function latestTime(values: string[]) {
+  const latest = values
+    .filter(Boolean)
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0]
+  return latest ? new Date(latest).toISOString() : ''
+}
+
+function unreadMessages(messages: RoomMessage[], player: Player | null, readAt?: string) {
+  const threshold = readAt ? new Date(readAt).getTime() : 0
+  return messages.filter((message) => (
+    message.sender_player_id !== player?.id &&
+    new Date(message.created_at).getTime() > threshold
+  )).length
+}
+
+function playNotificationSound() {
+  try {
+    const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtor) return
+    const context = new AudioCtor()
+    const gain = context.createGain()
+    const oscillator = context.createOscillator()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, context.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.08)
+    gain.gain.setValueAtTime(0.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.012)
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.2)
+    window.setTimeout(() => void context.close(), 260)
+  } catch {
+    // Browsers may block sound until the user interacts with the page.
+  }
+}
+
 export default function GamePage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
@@ -198,30 +264,60 @@ export default function GamePage() {
     players,
     clues,
     messages,
+    savedFiles,
     currentVote,
     setRoom,
     setPlayer,
     setCurrentVote,
     addMessage,
+    savePhoneFile,
     expireClue,
     setElapsed,
-    incrementElapsed,
     gameElapsedSeconds,
   } = useGameStore()
   const [activeApp, setActiveApp] = useState<AppView>('home')
   const [selectedClue, setSelectedClue] = useState<Clue | null>(null)
+  const [selectedSavedFile, setSelectedSavedFile] = useState<SavedPhoneFile | null>(null)
+  const [requestedChatId, setRequestedChatId] = useState<ChatId | null>(null)
+  const [readAtByChat, setReadAtByChat] = useState<Record<string, string>>({})
   const [betrayalPrompt, setBetrayalPrompt] = useState(false)
   const [finishPrompt, setFinishPrompt] = useState(false)
   const [finishingRoom, setFinishingRoom] = useState(false)
   const [finishError, setFinishError] = useState('')
   const [kairoMessage, setKairoMessage] = useState<string | null>(null)
   const [glitch, setGlitch] = useState(false)
-  const [newClueAlert, setNewClueAlert] = useState<Clue | null>(null)
+  const [phoneNotification, setPhoneNotification] = useState<PhoneNotification | null>(null)
   const finishRequestedRef = useRef(false)
   const knownClueIdsRef = useRef<Set<string>>(new Set())
   const cluesInitializedRef = useRef(false)
+  const knownMessageIdsRef = useRef<Set<string>>(new Set())
+  const messagesInitializedRef = useRef(false)
 
   useRoomRealtime(room?.id)
+
+  const readStorageKey = room?.id && player?.id ? `vertice-chat-read:${room.id}:${player.id}` : ''
+
+  useEffect(() => {
+    if (!readStorageKey) return
+    try {
+      setReadAtByChat(JSON.parse(localStorage.getItem(readStorageKey) || '{}'))
+    } catch {
+      setReadAtByChat({})
+    }
+  }, [readStorageKey])
+
+  const markChatRead = useCallback((chatId: ChatId) => {
+    if (!readStorageKey) return
+    setReadAtByChat((current) => {
+      const latest = current[chatId] ? new Date(current[chatId]).getTime() : 0
+      if (Date.now() - latest < 800) return current
+      const next = { ...current, [chatId]: new Date().toISOString() }
+      localStorage.setItem(readStorageKey, JSON.stringify(next))
+      return next
+    })
+  }, [readStorageKey])
+
+  const consumeRequestedChat = useCallback(() => setRequestedChatId(null), [])
 
   useEffect(() => {
     const savedRoom = sessionStorage.getItem('vertice_room')
@@ -241,12 +337,13 @@ export default function GamePage() {
   }, [])
 
   useEffect(() => {
-    if (!room || !player) return
-    const timer = window.setInterval(() => {
-      incrementElapsed()
-    }, 1000)
+    if (!room?.started_at || room.status !== 'playing') return
+    const startedAt = new Date(room.started_at).getTime()
+    const syncElapsed = () => setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+    syncElapsed()
+    const timer = window.setInterval(syncElapsed, 250)
     return () => window.clearInterval(timer)
-  }, [room?.id, player?.id])
+  }, [room?.started_at, room?.status, setElapsed])
 
   useEffect(() => {
     if (!room || !player) return
@@ -258,7 +355,7 @@ export default function GamePage() {
       const betrayalRoles = ['detetive', 'amigo', 'jornalista', 'testemunha']
       if (betrayalRoles.includes(player.role || '')) setBetrayalPrompt(true)
     }
-  }, [Math.floor(gameElapsedSeconds / 30)])
+  }, [room?.id, player?.id, gameElapsedSeconds, betrayalPrompt, player?.betrayal_choice, player?.role])
 
   useEffect(() => {
     const now = new Date()
@@ -290,16 +387,57 @@ export default function GamePage() {
     const clue = fresh.at(-1)
     if (!clue) return
 
-    setNewClueAlert(clue)
+    const notificationTitle = clue.clue_type === 'kairo_appears' ? 'Contacto desconhecido' : 'VÉRTICE'
+    const notificationBody = isPrivateClue(clue)
+      ? `Nova pista privada: ${clue.title}`
+      : clueText(clue) || clue.title || 'Nova mensagem recebida.'
+    setPhoneNotification({
+      id: `clue:${clue.id}`,
+      title: notificationTitle,
+      body: notificationBody,
+      chatId: isPrivateClue(clue) ? 'vertice' : 'group',
+      clue,
+    })
+    playNotificationSound()
     setGlitch(true)
     window.setTimeout(() => setGlitch(false), 400)
-    window.setTimeout(() => setNewClueAlert(null), 4500)
+    window.setTimeout(() => setPhoneNotification((current) => current?.id === `clue:${clue.id}` ? null : current), 4500)
 
     if (clue.clue_type === 'kairo_appears') {
       setKairoMessage(asText(clueContent(clue).text))
       window.setTimeout(() => setKairoMessage(null), 5000)
     }
   }, [player?.id, clues])
+
+  useEffect(() => {
+    if (!player) return
+    const known = knownMessageIdsRef.current
+    if (!messagesInitializedRef.current) {
+      messages.forEach((message) => known.add(message.id))
+      messagesInitializedRef.current = true
+      return
+    }
+
+    const fresh = messages
+      .filter((message) => !known.has(message.id))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    fresh.forEach((message) => known.add(message.id))
+
+    const incoming = fresh.filter((message) => message.sender_player_id !== player.id).at(-1)
+    if (!incoming) return
+
+    const chatId: ChatId = incoming.recipient_player_id ? `player:${incoming.sender_player_id || ''}` : 'group'
+    setPhoneNotification({
+      id: `message:${incoming.id}`,
+      title: incoming.sender_name || (incoming.sender_kind === 'ai' ? 'VÉRTICE' : 'Mensagem'),
+      body: incoming.body || 'Nova mensagem recebida.',
+      chatId,
+    })
+    playNotificationSound()
+    setGlitch(true)
+    window.setTimeout(() => setGlitch(false), 260)
+    window.setTimeout(() => setPhoneNotification((current) => current?.id === `message:${incoming.id}` ? null : current), 4200)
+  }, [player?.id, messages])
 
   useEffect(() => {
     if (room?.status === 'finished') {
@@ -412,18 +550,74 @@ export default function GamePage() {
     setActiveApp('clue')
   }
 
+  function saveClueToPhone(clue: Clue) {
+    if (!room || !player) return
+    const fileUrl = clueFileUrl(clue)
+    const fileName = clueFileName(clue)
+    if (!fileUrl || !fileName) return
+    const file: SavedPhoneFile = {
+      id: `${room.id}:${player.id}:${clue.id}`,
+      clueId: clue.id,
+      roomId: room.id,
+      playerId: player.id,
+      title: clue.title,
+      fileName,
+      fileUrl,
+      fileType: fileTypeForClue(clue),
+      savedAt: new Date().toISOString(),
+      clue,
+    }
+    savePhoneFile(file)
+    setPhoneNotification({
+      id: `saved:${clue.id}:${Date.now()}`,
+      title: file.fileType === 'photo' ? 'Guardado na Galeria' : 'Guardado em Ficheiros',
+      body: fileName,
+      chatId: file.fileType === 'photo' ? undefined : 'vertice',
+    })
+    playNotificationSound()
+  }
+
+  function openSavedFile(file: SavedPhoneFile) {
+    setSelectedSavedFile(file)
+    setActiveApp('saved-file')
+  }
+
+  function openPhoneNotification(notification: PhoneNotification) {
+    if (notification.clue) {
+      void openClue(notification.clue)
+      return
+    }
+    if (notification.chatId) {
+      setRequestedChatId(notification.chatId)
+      setActiveApp('messages')
+    }
+  }
+
   const elapsedMin = Math.floor(gameElapsedSeconds / 60)
   const elapsedSec = gameElapsedSeconds % 60
   const activeClues = clues.filter((clue) => !clue.expired)
   const batteryLevel = Math.max(5, 100 - Math.floor(gameElapsedSeconds / 54))
-  const unread = unreadCount(clues)
+  const unread = useMemo(
+    () => buildPhoneChats(player, players, clues, messages, readAtByChat).reduce((total, chat) => total + chat.unread, 0),
+    [player, players, clues, messages, readAtByChat],
+  )
+  const clueById = useMemo(() => new Map(clues.map((clue) => [clue.id, clue])), [clues])
+  const roomSavedFiles = savedFiles
+    .filter((file) => file.roomId === room?.id && file.playerId === player?.id)
+    .map((file) => {
+      const freshClue = clueById.get(file.clueId)
+      const freshUrl = freshClue ? clueFileUrl(freshClue) : ''
+      return freshClue && freshUrl ? { ...file, fileUrl: freshUrl, clue: freshClue } : file
+    })
+  const savedPhotos = roomSavedFiles.filter((file) => file.fileType === 'photo')
+  const savedDocuments = roomSavedFiles.filter((file) => file.fileType !== 'photo')
   const archive = (room as (Room & { archives?: { title?: string; subtitle?: string } }) | null)?.archives
   const archiveName = archive ? `${archive.title || 'Arquivo'}: ${archive.subtitle || 'Sessão ativa'}` : 'Arquivo em execução'
 
   const apps: AppDefinition[] = [
     { id: 'messages', icon: MessageCircle, short: 'WA', label: 'Mensagens', count: unread, accent: 'bg-emerald-900/80 border-emerald-400/20' },
-    { id: 'gallery', icon: ImageIcon, short: 'IMG', label: 'Galeria', count: unreadCount(clues.filter(isPhoto)), accent: 'bg-zinc-800 border-white/10' },
-    { id: 'email', icon: Mail, short: '@', label: 'Email', count: unreadCount(clues.filter(isDocument)), accent: 'bg-blue-950/80 border-blue-300/15' },
+    { id: 'gallery', icon: ImageIcon, short: 'IMG', label: 'Galeria', count: unreadCount(clues.filter(isPhoto)) + savedPhotos.length, accent: 'bg-zinc-800 border-white/10' },
+    { id: 'email', icon: FolderOpen, short: 'FILE', label: 'Ficheiros', count: unreadCount(clues.filter(isDocument)) + savedDocuments.length, accent: 'bg-blue-950/80 border-blue-300/15' },
     { id: 'notes', icon: FileText, short: 'TXT', label: 'Notas', count: unreadCount(clues.filter(isTextNote)), accent: 'bg-amber-950/80 border-amber-300/15' },
     { id: 'calls', icon: Phone, short: 'CALL', label: 'Chamadas', count: unreadCount(clues.filter(isAudio)), accent: 'bg-cyan-950/70 border-cyan-300/15' },
     { id: 'browser', icon: Globe2, short: 'WWW', label: 'Browser', count: unreadCount(clues.filter((clue) => clue.clue_type === 'webapp_unlock')), accent: 'bg-zinc-900 border-white/10' },
@@ -438,9 +632,9 @@ export default function GamePage() {
           <PhoneStatusBar clock={clock} batteryLevel={batteryLevel} variant={variant} />
 
           <NotificationDock
-            clue={newClueAlert}
+            notification={phoneNotification}
             variant={variant}
-            onOpen={openClue}
+            onOpen={openPhoneNotification}
           />
 
           <AnimatePresence>
@@ -497,9 +691,13 @@ export default function GamePage() {
                   players={players}
                   clues={clues}
                   messages={messages}
+                  readAtByChat={readAtByChat}
+                  requestedChatId={requestedChatId}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
                   onSendMessage={sendRoomMessage}
+                  onReadChat={markChatRead}
+                  onConsumeRequestedChat={consumeRequestedChat}
                 />
               )}
 
@@ -509,19 +707,23 @@ export default function GamePage() {
                   title="Galeria"
                   emptyText="Sem fotos desbloqueadas"
                   clues={sortedClues(clues.filter(isPhoto))}
+                  savedFiles={savedPhotos}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
+                  onOpenSavedFile={openSavedFile}
                 />
               )}
 
               {activeApp === 'email' && (
                 <ClueCollectionApp
                   key="email"
-                  title="Email"
+                  title="Ficheiros"
                   emptyText="Sem documentos recebidos"
                   clues={sortedClues(clues.filter(isDocument))}
+                  savedFiles={savedDocuments}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
+                  onOpenSavedFile={openSavedFile}
                 />
               )}
 
@@ -574,6 +776,16 @@ export default function GamePage() {
                   key="clue"
                   clue={selectedClue}
                   onBack={() => setActiveApp('messages')}
+                  onSaveFile={saveClueToPhone}
+                  saved={roomSavedFiles.some((file) => file.clueId === selectedClue.id)}
+                />
+              )}
+
+              {activeApp === 'saved-file' && selectedSavedFile && (
+                <SavedFileDetailView
+                  key="saved-file"
+                  file={selectedSavedFile}
+                  onBack={() => setActiveApp(selectedSavedFile.fileType === 'photo' ? 'gallery' : 'email')}
                 />
               )}
             </AnimatePresence>
@@ -640,30 +852,30 @@ function PhoneStatusBar({ clock, batteryLevel, variant }: { clock: string; batte
   )
 }
 
-function NotificationDock({ clue, variant, onOpen }: { clue: Clue | null; variant: DeviceVariant; onOpen: (clue: Clue) => void }) {
+function NotificationDock({ notification, variant, onOpen }: { notification: PhoneNotification | null; variant: DeviceVariant; onOpen: (notification: PhoneNotification) => void }) {
   return (
     <AnimatePresence>
-      {clue && (
+      {notification && (
         <motion.button
           type="button"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.22 }}
-          onClick={() => onOpen(clue)}
+          onClick={() => onOpen(notification)}
           className={`mx-4 mb-3 mt-1 flex shrink-0 items-center gap-3 border border-white/12 bg-zinc-950/88 px-3 py-3 text-left shadow-[0_16px_38px_rgba(0,0,0,0.42)] backdrop-blur-md ${
             variant === 'ios' ? 'rounded-2xl' : 'rounded-[22px]'
           }`}
-          aria-label={`Abrir pista ${clue.title}`}
+          aria-label={`Abrir notificação ${notification.title}`}
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-red/30 bg-red/10 text-red">
             <Bell size={17} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-sans text-[11px] font-bold text-white">VÉRTICE</div>
-            <div className="truncate font-sans text-xs text-white/76">Nova pista privada recebida.</div>
+            <div className="font-sans text-[11px] font-bold text-white">{notification.title}</div>
+            <div className="truncate font-sans text-xs text-white/76">{notification.body}</div>
           </div>
-          {clue.expires_at && <ExpiryPill clue={clue} compact />}
+          {notification.clue?.expires_at && <ExpiryPill clue={notification.clue} compact />}
         </motion.button>
       )}
     </AnimatePresence>
@@ -898,21 +1110,39 @@ function MessagesApp({
   players,
   clues,
   messages,
+  readAtByChat,
+  requestedChatId,
   onBack,
   onOpenClue,
   onSendMessage,
+  onReadChat,
+  onConsumeRequestedChat,
 }: {
   player: Player | null
   players: Player[]
   clues: Clue[]
   messages: RoomMessage[]
+  readAtByChat: Record<string, string>
+  requestedChatId: ChatId | null
   onBack: () => void
   onOpenClue: (clue: Clue) => void
   onSendMessage: (body: string, recipientPlayerId?: string) => Promise<void>
+  onReadChat: (chatId: ChatId) => void
+  onConsumeRequestedChat: () => void
 }) {
-  const chats = useMemo(() => buildPhoneChats(player, players, clues, messages), [player, players, clues, messages])
+  const chats = useMemo(() => buildPhoneChats(player, players, clues, messages, readAtByChat), [player, players, clues, messages, readAtByChat])
   const [activeChatId, setActiveChatId] = useState<ChatId | null>(null)
   const activeChat = chats.find((chat) => chat.id === activeChatId) || null
+
+  useEffect(() => {
+    if (!requestedChatId) return
+    setActiveChatId(requestedChatId)
+    onConsumeRequestedChat()
+  }, [requestedChatId, onConsumeRequestedChat])
+
+  useEffect(() => {
+    if (activeChatId) onReadChat(activeChatId)
+  }, [activeChatId, activeChat?.latestAt, onReadChat])
 
   if (activeChat) {
     return (
@@ -950,7 +1180,9 @@ function MessagesApp({
                 <div className="truncate font-sans text-xs font-bold text-white">{chat.label}</div>
                 <div className="mt-0.5 truncate font-sans text-[11px] text-white/42">{chat.subtitle}</div>
               </div>
-              {chat.unread > 0 && <Badge count={chat.unread} />}
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                {chat.unread > 0 && <Badge count={chat.unread} />}
+              </div>
             </button>
           ))}
         </div>
@@ -959,11 +1191,14 @@ function MessagesApp({
   )
 }
 
-function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[], messages: RoomMessage[]): PhoneChat[] {
+function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[], messages: RoomMessage[], readAtByChat: Record<string, string>): PhoneChat[] {
   const privateClues = sortedClues(clues.filter(isPrivateClue), true)
-  const groupClues = sortedClues(clues.filter(isGroupClue), true)
   const groupMessages = messages.filter((message) => !message.recipient_player_id)
+  const groupMessageEventIds = new Set(groupMessages.map((message) => message.event_id).filter(Boolean))
+  const groupClues = sortedClues(clues.filter((clue) => isGroupClue(clue) && !groupMessageEventIds.has(clue.event_id)), true)
   const latestGroupMessage = [...groupMessages].at(-1)
+  const verticeLatestAt = latestTime(privateClues.map((clue) => clue.created_at))
+  const groupLatestAt = latestTime([...groupClues.map((clue) => clue.created_at), ...groupMessages.map((message) => message.created_at)])
   const chats: PhoneChat[] = [
     {
       id: 'vertice',
@@ -974,6 +1209,7 @@ function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[]
       clues: privateClues,
       messages: [],
       unread: unreadCount(privateClues),
+      latestAt: verticeLatestAt,
     },
     {
       id: 'group',
@@ -983,7 +1219,8 @@ function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[]
       kind: 'group',
       clues: groupClues,
       messages: groupMessages,
-      unread: unreadCount(groupClues),
+      unread: unreadCount(groupClues) + unreadMessages(groupMessages, player, readAtByChat.group),
+      latestAt: groupLatestAt,
     },
   ]
 
@@ -997,20 +1234,27 @@ function buildPhoneChats(player: Player | null, players: Player[], clues: Clue[]
         (message.sender_player_id === roomPlayer.id && message.recipient_player_id === player.id)
       ))
       const latest = [...directMessages].at(-1)
+      const chatId: ChatId = `player:${roomPlayer.id}`
       chats.push({
-        id: `player:${roomPlayer.id}`,
-        label: roomPlayer.name,
-        subtitle: latest?.body || roomPlayer.role_label || 'Conversa privada',
+        id: chatId,
+        label: playerDisplayName(roomPlayer),
+        subtitle: latest?.body || 'Conversa privada',
         icon: MessageCircle,
         kind: 'player',
         playerId: roomPlayer.id,
         clues: [],
         messages: directMessages,
-        unread: 0,
+        unread: unreadMessages(directMessages, player, readAtByChat[chatId]),
+        latestAt: latestTime(directMessages.map((message) => message.created_at)) || roomPlayer.joined_at,
       })
     })
 
-  return chats
+  return chats.sort((a, b) => {
+    const diff = new Date(b.latestAt || 0).getTime() - new Date(a.latestAt || 0).getTime()
+    if (diff !== 0) return diff
+    const order: Partial<Record<ChatId, number>> = { vertice: 0, group: 1 }
+    return (order[a.id] ?? 2) - (order[b.id] ?? 2)
+  })
 }
 
 function ChatConversation({
@@ -1086,6 +1330,7 @@ function ChatBubble({
   onOpenClue: (clue: Clue) => void
 }) {
   const fileName = entry.clue ? clueFileName(entry.clue) : ''
+  const fileUrl = entry.clue ? clueFileUrl(entry.clue) : ''
   const expired = Boolean(entry.clue?.expired)
   const isSpecial = entry.tone === 'ai' || entry.tone === 'kairo' || entry.tone === 'meme'
 
@@ -1104,6 +1349,11 @@ function ChatBubble({
           <span className={`font-sans text-[11px] font-bold ${isSpecial ? 'text-red/80' : 'text-white/65'}`}>{entry.mine ? 'Tu' : entry.sender}</span>
           <span className="font-mono text-[9px] text-white/24">{formatMessageTime(entry.createdAt)}</span>
         </div>
+        {entry.clue && isPhoto(entry.clue) && fileUrl && !expired && (
+          <button type="button" onClick={() => onOpenClue(entry.clue as Clue)} className="mb-2 block overflow-hidden rounded-xl border border-white/10 bg-black">
+            <img src={fileUrl} alt={entry.clue.title} loading="lazy" decoding="async" className="max-h-44 w-full object-cover" />
+          </button>
+        )}
         {entry.body && <p className="whitespace-pre-line font-sans text-xs leading-relaxed text-white/74">{entry.body}</p>}
         {entry.clue && fileName && (
           <button
@@ -1232,8 +1482,8 @@ function VetoApp({
         {votedPlayer && (
           <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-950/30 p-4">
             <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-emerald-200/70">Voto registado</div>
-            <div className="mt-1 font-sans text-sm font-bold text-white">{votedPlayer.name}</div>
-            <div className="mt-0.5 font-mono text-[10px] text-white/32">{votedPlayer.role_label}</div>
+            <div className="mt-1 font-sans text-sm font-bold text-white">{playerDisplayName(votedPlayer)}</div>
+            <div className="mt-0.5 font-mono text-[10px] text-white/32">Voto privado registado</div>
           </div>
         )}
 
@@ -1253,8 +1503,8 @@ function VetoApp({
                   <Users size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-sans text-xs font-bold text-white">{roomPlayer.name}</div>
-                  <div className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{roomPlayer.role_label}</div>
+                  <div className="truncate font-sans text-xs font-bold text-white">{playerDisplayName(roomPlayer)}</div>
+                  <div className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">Jogador da sala</div>
                 </div>
               </button>
             )
@@ -1293,25 +1543,47 @@ function ClueCollectionApp({
   title,
   emptyText,
   clues,
+  savedFiles = [],
   onBack,
   onOpenClue,
+  onOpenSavedFile,
 }: {
   title: string
   emptyText: string
   clues: Clue[]
+  savedFiles?: SavedPhoneFile[]
   onBack: () => void
   onOpenClue: (clue: Clue) => void
+  onOpenSavedFile?: (file: SavedPhoneFile) => void
 }) {
+  const hasItems = clues.length > 0 || savedFiles.length > 0
   return (
     <PhoneAppView title={title} onBack={onBack}>
       <div className="h-full overflow-y-auto p-4">
-        {clues.length === 0 ? (
+        {!hasItems ? (
           <EmptyPhoneState icon={FileText} title={emptyText} text="Quando o VÉRTICE desbloquear algo para ti, aparece aqui." />
         ) : (
-          <div className="space-y-2">
-            {clues.map((clue) => (
-              <ClueListItem key={clue.id} clue={clue} onClick={() => onOpenClue(clue)} />
-            ))}
+          <div className="space-y-5">
+            {savedFiles.length > 0 && onOpenSavedFile && (
+              <section>
+                <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/28">Guardados no telefone</div>
+                <div className="space-y-2">
+                  {savedFiles.map((file) => (
+                    <SavedFileListItem key={file.id} file={file} onClick={() => onOpenSavedFile(file)} />
+                  ))}
+                </div>
+              </section>
+            )}
+            {clues.length > 0 && (
+              <section>
+                <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/28">Recebidos</div>
+                <div className="space-y-2">
+                  {clues.map((clue) => (
+                    <ClueListItem key={clue.id} clue={clue} onClick={() => onOpenClue(clue)} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -1353,7 +1625,22 @@ function ClueListItem({ clue, onClick }: { clue: Clue; onClick: () => void }) {
   )
 }
 
-function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
+function SavedFileListItem({ file, onClick }: { file: SavedPhoneFile; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-emerald-400/15 bg-emerald-950/18 px-3 py-3 text-left transition-all hover:border-emerald-300/30">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-300/20 bg-emerald-900/25 text-emerald-100">
+        {file.fileType === 'photo' ? <ImageIcon size={16} /> : <FolderOpen size={16} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-sans text-xs font-bold text-white">{file.title}</div>
+        <div className="mt-0.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">{file.fileName}</div>
+      </div>
+      <span className="rounded-full border border-emerald-300/20 px-2 py-1 font-mono text-[9px] text-emerald-100/70">guardado</span>
+    </button>
+  )
+}
+
+function ClueDetailView({ clue, onBack, onSaveFile, saved }: { clue: Clue; onBack: () => void; onSaveFile: (clue: Clue) => void; saved: boolean }) {
   const content = clueContent(clue)
   const fileUrl = clueFileUrl(clue)
   const fileName = clueFileName(clue)
@@ -1372,13 +1659,17 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
 
         {isPhoto(clue) && canOpenFile && (
           <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
-            <img src={fileUrl} alt={clue.title} className="max-h-[46vh] w-full object-contain" />
+            <img src={fileUrl} alt={clue.title} loading="eager" decoding="async" className="max-h-[46vh] w-full object-contain" />
           </div>
         )}
 
         {isDocument(clue) && isPdfFile(clue) && canOpenFile && (
           <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
-            <iframe src={fileUrl} title={clue.title} className="h-[52vh] w-full bg-zinc-950" />
+            <object data={`${fileUrl}#toolbar=0&navpanes=0&view=FitH`} type="application/pdf" className="h-[52vh] w-full bg-zinc-950">
+              <div className="flex h-[52vh] items-center justify-center px-5 text-center">
+                <p className="font-sans text-xs leading-relaxed text-white/55">Pré-visualização indisponível neste navegador. Guarda o ficheiro em Ficheiros para manter o acesso interno.</p>
+              </div>
+            </object>
           </div>
         )}
 
@@ -1425,6 +1716,17 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
           </div>
         )}
 
+        {canOpenFile && fileName && (
+          <button
+            type="button"
+            onClick={() => onSaveFile(clue)}
+            className="mt-3 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300/25 bg-emerald-950/35 px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-50 transition-all hover:border-emerald-200/40 active:scale-[0.99]"
+          >
+            <Download size={15} />
+            {saved ? 'Guardado no telefone' : isPhoto(clue) ? 'Guardar na Galeria' : 'Guardar em Ficheiros'}
+          </button>
+        )}
+
         {canOpenFile && !isPhoto(clue) && !isPdfFile(clue) && !isAudio(clue) && !isVideoFile(clue) && (
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/28 p-4">
             <div className="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/35">
@@ -1436,6 +1738,49 @@ function ClueDetailView({ clue, onBack }: { clue: Clue; onBack: () => void }) {
         )}
 
         {clue.expires_at && <ExpiryTimer clue={clue} />}
+      </div>
+    </PhoneAppView>
+  )
+}
+
+function SavedFileDetailView({ file, onBack }: { file: SavedPhoneFile; onBack: () => void }) {
+  const isPhotoFile = file.fileType === 'photo'
+  const isPdf = file.fileType === 'pdf'
+
+  return (
+    <PhoneAppView title={file.title} onBack={onBack}>
+      <div className="h-full overflow-y-auto p-5">
+        <div className="mb-4 rounded-2xl border border-emerald-300/20 bg-emerald-950/20 p-4">
+          <div className="mb-1 font-mono text-[9px] uppercase tracking-[0.22em] text-emerald-100/60">Guardado no telefone</div>
+          <div className="truncate font-mono text-[10px] text-white/50">{file.fileName}</div>
+          <div className="mt-1 font-mono text-[9px] text-white/26">{formatMessageTime(file.savedAt)}</div>
+        </div>
+
+        {isPhotoFile && (
+          <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+            <img src={file.fileUrl} alt={file.title} loading="eager" decoding="async" className="max-h-[52vh] w-full object-contain" />
+          </div>
+        )}
+
+        {isPdf && (
+          <div className="mb-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+            <object data={`${file.fileUrl}#toolbar=0&navpanes=0&view=FitH`} type="application/pdf" className="h-[56vh] w-full bg-zinc-950">
+              <div className="flex h-[56vh] items-center justify-center px-5 text-center">
+                <p className="font-sans text-xs leading-relaxed text-white/55">O visualizador interno deste navegador não conseguiu renderizar o PDF.</p>
+              </div>
+            </object>
+          </div>
+        )}
+
+        {!isPhotoFile && !isPdf && (
+          <div className="rounded-2xl border border-white/10 bg-black/28 p-4">
+            <div className="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/35">
+              <Paperclip size={14} />
+              Ficheiro interno
+            </div>
+            <div className="break-all font-mono text-[10px] text-white/50">{file.fileName}</div>
+          </div>
+        )}
       </div>
     </PhoneAppView>
   )

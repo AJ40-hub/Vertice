@@ -34,7 +34,7 @@ export function useRoomRealtime(roomId: string | undefined) {
     }
 
     refresh()
-    const interval = window.setInterval(refresh, 2500)
+    const interval = window.setInterval(refresh, 1000)
     return () => {
       cancelled = true
       window.clearInterval(interval)
@@ -92,7 +92,7 @@ export function usePlayersRealtime(roomId: string | undefined, onUpdate: (player
     fetchPlayers()
     if (!roomId || !player?.id) return
 
-    const interval = window.setInterval(fetchPlayers, 2500)
+    const interval = window.setInterval(fetchPlayers, 1000)
     return () => window.clearInterval(interval)
   }, [roomId, player?.id, fetchPlayers])
 }

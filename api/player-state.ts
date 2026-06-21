@@ -2,14 +2,32 @@ import { getSupabaseAdmin, normalizeStoragePath } from './_lib/_supabaseAdmin.js
 
 const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || process.env.VITE_SUPABASE_STORAGE_BUCKET || 'vertice-assets'
 
-function publicPlayer(player: any) {
+const roleTargets: Record<string, string> = {
+  detetive: 'A',
+  amigo: 'B',
+  jornalista: 'C',
+  hacker: 'D',
+  inimigo: 'E',
+  testemunha: 'F',
+  familiar: 'G',
+  fa: 'H',
+}
+
+function publicPlayer(player: any, viewerPlayerId: string) {
+  const isViewer = player.id === viewerPlayerId
+  const roleTarget = player.role ? roleTargets[player.role] || null : null
+  const publicName = roleTarget ? `${player.name} (${roleTarget})` : player.name
+
   return {
     id: player.id,
     room_id: player.room_id,
     name: player.name,
+    public_name: publicName,
     gender: player.gender,
-    role: player.role,
-    role_label: player.role_label,
+    whatsapp: isViewer ? player.whatsapp : '',
+    role: isViewer ? player.role : null,
+    role_label: isViewer ? player.role_label : null,
+    role_target: roleTarget,
     is_host: player.is_host,
     score: player.score,
     score_details: player.score_details || {},
@@ -93,7 +111,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       room,
       player,
-      players: (players || []).map(publicPlayer),
+      players: (players || []).map((roomPlayer) => publicPlayer(roomPlayer, playerId)),
       clues: signedClues,
       messages,
       currentVote: currentVote || null,
