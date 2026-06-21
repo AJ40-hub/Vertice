@@ -366,10 +366,11 @@ export default function GamePage() {
 
   async function sendRoomMessage(body: string, recipientPlayerId?: string) {
     if (!room || !player) throw new Error('Sessão indisponível.')
-    const response = await fetch('/api/player-message', {
+    const response = await fetch('/api/player-action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'send_message',
         room_id: room.id,
         player_id: player.id,
         recipient_player_id: recipientPlayerId || null,
@@ -383,10 +384,11 @@ export default function GamePage() {
 
   async function castVeto(suspectPlayerId: string, reason: string) {
     if (!room || !player) throw new Error('Sessão indisponível.')
-    const response = await fetch('/api/player-vote', {
+    const response = await fetch('/api/player-action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        action: 'vote_suspect',
         room_id: room.id,
         player_id: player.id,
         suspect_player_id: suspectPlayerId,
