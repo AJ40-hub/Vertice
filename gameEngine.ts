@@ -116,54 +116,95 @@ type ScoreContext = {
   vetoCast?: boolean
   vetoTargetRole?: string | null
   votesReceived?: number
+  totalClues?: number
+  cluesOpened?: number
+  cluesOpenedWithinDeadline?: number
+  averageClueOpenDelaySeconds?: number | null
 }
 
 // ── SCORING ENGINE ────────────────────────────────────────────
-export function calculateScoreDetails(player: Player, elapsedSeconds: number, context: ScoreContext = {}) {
+export function calculateScoreDetails(player: Player, _elapsedSeconds: number, context: ScoreContext = {}) {
   const details = player.score_details || {}
-  const cluesOpened = Number(details.clues_opened || 0)
+  const totalClues = Math.max(0, Number(context.totalClues ?? details.total_clues ?? 0))
+  const cluesOpened = Math.max(0, Number(context.cluesOpened ?? details.clues_opened ?? 0))
+  const cluesOpenedWithinDeadline = Math.max(0, Number(context.cluesOpenedWithinDeadline ?? details.clues_opened_within_deadline ?? 0))
+  const averageClueOpenDelaySeconds = (context.averageClueOpenDelaySeconds ?? Number(details.average_clue_open_delay_seconds || 0)) || null
   const messagesSent = Number(context.messagesSent ?? details.messages_sent ?? 0)
   const groupMessagesSent = Number(context.groupMessagesSent ?? details.group_messages_sent ?? 0)
   const privateMessagesSent = Number(context.privateMessagesSent ?? details.private_messages_sent ?? 0)
   const vetoCast = Boolean(context.vetoCast ?? details.veto_cast)
   const vetoTargetRole = String(context.vetoTargetRole || details.veto_target_role || '')
   const votesReceived = Number(context.votesReceived || 0)
-  const minutesPlayed = elapsedSeconds / 60
 
-  const clueScore = Math.min(cluesOpened * 15, 90)
-  const participationScore = Math.min(messagesSent * 3 + groupMessagesSent * 2 + privateMessagesSent, 45)
-  const cooperationScore = Math.max(0, player.state_cooperation - 50) * 1.2
-  const pressureScore = Math.max(0, 100 - player.state_pressure) * 0.35
-  const vetoScore = vetoCast ? 15 : 0
-  const accuracyScore = ['hacker', 'inimigo'].includes(vetoTargetRole) ? 25 : 0
-  const betrayalScore = player.betrayal_choice === 'reveal' ? 25 : player.betrayal_choice === 'keep' ? 10 : 0
-  const enduranceScore = Math.min(minutesPlayed * 0.4, 30)
-  const deductionForSuspicion = Math.min(votesReceived * 3, 18)
+  const clueBase = totalClues > 0 ? cluesOpened / totalClues : 0
+  const deadlineBase = totalClues > 0 ? cluesOpenedWithinDeadline / totalClues : 0
+  const speedBase = averageClueOpenDelaySeconds === null
+    ? 0
+    : Math.max(0, 1 - Math.min(averageClueOpenDelaySeconds, 210) / 210)
+
+  const investigationScore = Math.min(30, Math.round(
+    deadlineBase * 16 +
+    clueBase * 9 +
+    speedBase * 5
+  ))
+
+  const participationBase = Math.min(groupMessagesSent, 8) / 8
+  const usefulPresenceBase = messagesSent > 0 ? 1 : 0
+  const spamPenalty = Math.max(0, groupMessagesSent - 24) * 0.5
+  const participationScore = Math.max(0, Math.min(20, Math.round(
+    participationBase * 13 +
+    Math.min(privateMessagesSent, 4) +
+    usefulPresenceBase * 3 -
+    spamPenalty
+  )))
+
+  const vetoScore = vetoCast ? 6 : 0
+  const accuracyScore = ['hacker', 'inimigo'].includes(vetoTargetRole) ? 8 : vetoCast ? 2 : 0
+  const betrayalScore = player.betrayal_choice === 'reveal' ? 4 : player.betrayal_choice === 'keep' ? 2 : 0
+  const decisionScore = Math.min(20, vetoScore + accuracyScore + betrayalScore + (cluesOpenedWithinDeadline > 0 ? 2 : 0))
+
+  const roleObjectiveScore = Math.min(15, Math.round(
+    clueBase * 6 +
+    (groupMessagesSent > 0 ? 3 : 0) +
+    (privateMessagesSent > 0 ? 2 : 0) +
+    (vetoCast ? 2 : 0) +
+    (player.betrayal_choice ? 2 : 0)
+  ))
+
+  const cooperationBase = Math.max(0, Math.min(100, player.state_cooperation || 50)) / 100
+  const pressureBase = Math.max(0, 100 - Math.max(0, Math.min(100, player.state_pressure || 50))) / 100
+  const suspicionPenalty = Math.min(votesReceived * 2, 6)
+  const socialScore = Math.max(0, Math.min(15, Math.round(
+    cooperationBase * 6 +
+    pressureBase * 4 +
+    (messagesSent > 0 ? 3 : 0) +
+    (votesReceived === 0 ? 2 : 0) -
+    suspicionPenalty
+  )))
 
   const score = Math.max(0, Math.round(
-    clueScore +
+    investigationScore +
     participationScore +
-    cooperationScore +
-    pressureScore +
-    vetoScore +
-    accuracyScore +
-    betrayalScore +
-    enduranceScore -
-    deductionForSuspicion
+    decisionScore +
+    roleObjectiveScore +
+    socialScore
   ))
 
   return {
     score,
-    clueScore: Math.round(clueScore),
-    participationScore: Math.round(participationScore),
-    cooperationScore: Math.round(cooperationScore),
-    pressureScore: Math.round(pressureScore),
+    investigationScore,
+    participationScore,
+    decisionScore,
+    roleObjectiveScore,
+    socialScore,
     vetoScore,
     accuracyScore,
     betrayalScore,
-    enduranceScore: Math.round(enduranceScore),
-    deductionForSuspicion,
+    suspicionPenalty,
+    totalClues,
     cluesOpened,
+    cluesOpenedWithinDeadline,
+    averageClueOpenDelaySeconds,
     messagesSent,
     groupMessagesSent,
     privateMessagesSent,

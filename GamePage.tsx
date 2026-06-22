@@ -11,7 +11,6 @@ import {
   Eye,
   FileText,
   FolderOpen,
-  Globe2,
   Image as ImageIcon,
   MessageCircle,
   Paperclip,
@@ -158,7 +157,7 @@ function isAudio(clue: Clue) {
 
 function isDocument(clue: Clue) {
   const fileName = clueFileName(clue).toLowerCase()
-  return clue.clue_type === 'document' || clue.clue_type === 'clue' || clue.clue_type === 'webapp_unlock' || fileName.endsWith('.pdf')
+  return clue.clue_type === 'document' || clue.clue_type === 'clue' || fileName.endsWith('.pdf')
 }
 
 function isPdfFile(clue: Clue) {
@@ -189,8 +188,12 @@ function isGroupClue(clue: Clue) {
   return ['ia_message', 'meme', 'kairo_appears'].includes(clue.clue_type)
 }
 
+function isSystemClue(clue: Clue) {
+  return clue.clue_type === 'webapp_unlock'
+}
+
 function isPrivateClue(clue: Clue) {
-  return !isGroupClue(clue)
+  return !isGroupClue(clue) && !isSystemClue(clue)
 }
 
 function formatMessageTime(value: string) {
@@ -320,6 +323,11 @@ export default function GamePage() {
   const consumeRequestedChat = useCallback(() => setRequestedChatId(null), [])
 
   useEffect(() => {
+    finishRequestedRef.current = false
+    setElapsed(0)
+  }, [room?.id, setElapsed])
+
+  useEffect(() => {
     const savedRoom = sessionStorage.getItem('vertice_room')
     const savedPlayer = sessionStorage.getItem('vertice_player')
     if (!savedRoom || !savedPlayer) {
@@ -333,11 +341,17 @@ export default function GamePage() {
     setPlayer(playerData)
     if (roomData.started_at) {
       setElapsed(Math.floor((Date.now() - new Date(roomData.started_at).getTime()) / 1000))
+    } else {
+      setElapsed(0)
     }
   }, [])
 
   useEffect(() => {
-    if (!room?.started_at || room.status !== 'playing') return
+    if (!room?.started_at) {
+      setElapsed(0)
+      return
+    }
+    if (room.status !== 'playing') return
     const startedAt = new Date(room.started_at).getTime()
     const syncElapsed = () => setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
     syncElapsed()
@@ -453,7 +467,11 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!room || !player || finishRequestedRef.current || room.status !== 'playing') return
-    if (gameElapsedSeconds < 90 * 60) return
+    if (!room.started_at) return
+    const archiveDuration = Number((room as Room & { archives?: { duration_minutes?: number } }).archives?.duration_minutes || 90)
+    const requiredDurationSeconds = Math.max(1, archiveDuration) * 60
+    const elapsedFromServerStart = Math.max(0, Math.floor((Date.now() - new Date(room.started_at).getTime()) / 1000))
+    if (elapsedFromServerStart < requiredDurationSeconds) return
     finishRequestedRef.current = true
     fetch('/api/finish-room', {
       method: 'POST',
@@ -462,7 +480,7 @@ export default function GamePage() {
     }).catch(() => {
       finishRequestedRef.current = false
     })
-  }, [room?.id, room?.status, player?.id, gameElapsedSeconds])
+  }, [room?.id, room?.status, room?.started_at, player?.id, gameElapsedSeconds])
 
   async function handleBetrayal(choice: 'reveal' | 'keep') {
     if (!player || !room) return
@@ -611,7 +629,7 @@ export default function GamePage() {
     })
   const savedPhotos = roomSavedFiles.filter((file) => file.fileType === 'photo')
   const savedDocuments = roomSavedFiles.filter((file) => file.fileType !== 'photo')
-  const archive = (room as (Room & { archives?: { title?: string; subtitle?: string } }) | null)?.archives
+  const archive = (room as (Room & { archives?: { title?: string; subtitle?: string; duration_minutes?: number } }) | null)?.archives
   const archiveName = archive ? `${archive.title || 'Arquivo'}: ${archive.subtitle || 'Sessão ativa'}` : 'Arquivo em execução'
 
   const apps: AppDefinition[] = [
@@ -620,7 +638,7 @@ export default function GamePage() {
     { id: 'email', icon: FolderOpen, short: 'FILE', label: 'Ficheiros', count: unreadCount(clues.filter(isDocument)) + savedDocuments.length, accent: 'bg-blue-950/80 border-blue-300/15' },
     { id: 'notes', icon: FileText, short: 'TXT', label: 'Notas', count: unreadCount(clues.filter(isTextNote)), accent: 'bg-amber-950/80 border-amber-300/15' },
     { id: 'calls', icon: Phone, short: 'CALL', label: 'Chamadas', count: unreadCount(clues.filter(isAudio)), accent: 'bg-cyan-950/70 border-cyan-300/15' },
-    { id: 'browser', icon: Globe2, short: 'WWW', label: 'Browser', count: unreadCount(clues.filter((clue) => clue.clue_type === 'webapp_unlock')), accent: 'bg-zinc-900 border-white/10' },
+    { id: 'browser', icon: Bell, short: 'SYS', label: 'Sistema', count: unreadCount(clues.filter(isSystemClue)), accent: 'bg-zinc-900 border-white/10' },
     { id: 'veto', icon: Shield, short: 'VETO', label: 'Veto', count: currentVote ? 0 : 1, accent: 'bg-red/80 border-red/30' },
   ]
 
@@ -752,9 +770,9 @@ export default function GamePage() {
               {activeApp === 'browser' && (
                 <ClueCollectionApp
                   key="browser"
-                  title="Browser"
-                  emptyText="Sem páginas desbloqueadas"
-                  clues={sortedClues(clues.filter((clue) => clue.clue_type === 'webapp_unlock' || clue.clue_type === 'kairo_appears'))}
+                  title="Sistema"
+                  emptyText="Sem alertas ou desbloqueios"
+                  clues={sortedClues(clues.filter(isSystemClue))}
                   onBack={() => setActiveApp('home')}
                   onOpenClue={openClue}
                 />
@@ -958,7 +976,7 @@ function HostFinishSheet({
         <div className="mb-3 font-mono text-[10px] tracking-[0.25em] text-red/70">CONTROLO DO HOST</div>
         <h3 className="mb-3 font-display text-xl font-black text-white">Encerrar sala?</h3>
         <p className="mb-5 font-sans text-sm leading-relaxed text-white/66">
-          A sala será encerrada para todos os jogadores. Se o jogo já estiver em andamento, o ranking será calculado com o progresso atual.
+          A sala será encerrada para todos os jogadores. O ranking só será calculado se já existir tempo suficiente de jogo real.
         </p>
         {error && (
           <div className="mb-4 rounded-2xl border border-red/35 bg-red/10 p-3 font-sans text-xs leading-relaxed text-red/90">

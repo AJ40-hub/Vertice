@@ -20,6 +20,7 @@ export default function PostGamePage() {
   const [mostSuspected, setMostSuspected] = useState<MostSuspected | null>(null)
   const [phase, setPhase] = useState<'loading' | 'postgame' | 'ranking'>('loading')
   const [isPostgameEligible, setIsPostgameEligible] = useState(false)
+  const [rankingGenerated, setRankingGenerated] = useState(false)
   const [videoShown, setVideoShown] = useState(false)
   const [glitchText, setGlitchText] = useState(false)
 
@@ -44,17 +45,21 @@ export default function PostGamePage() {
     const response = await fetch('/api/finish-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ room_id: room.id, player_id: player.id }),
+      body: JSON.stringify({ room_id: room.id, player_id: player.id, report_only: true }),
     })
     const data = await response.json()
-    if (!response.ok) return
+    if (!response.ok) {
+      navigate(`/sala/${room.code}/jogo`)
+      return
+    }
 
     setAllPlayers(data.players as Player[])
-    setRanking(data.ranking as Ranking)
+    setRanking((data.ranking || null) as Ranking | null)
+    setRankingGenerated(Boolean(data.ranking))
     setMostSuspected((data.most_suspected || null) as MostSuspected | null)
 
     // Show postgame for eligible players first, then ranking
-    if (player?.postgame_eligible) {
+    if (player?.postgame_eligible && data.ranking) {
       setPhase('postgame')
       setTimeout(() => setPhase('ranking'), 20000) // 20s postgame experience
     } else {
@@ -63,7 +68,7 @@ export default function PostGamePage() {
   }
 
   const isHost = player?.is_host
-  const isWinner = allPlayers[0]?.id === player?.id
+  const isWinner = rankingGenerated && allPlayers[0]?.id === player?.id
 
   return (
     <div className="min-h-screen bg-black flex flex-col overflow-hidden">
@@ -82,14 +87,27 @@ export default function PostGamePage() {
             }} />
 
             <div className="text-center p-8 max-w-sm">
-              {/* Robot smile image placeholder */}
+              {/* Exclusive corrupted signal */}
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 1, duration: 1 }}
-                className="w-32 h-32 mx-auto mb-8 border border-red/30 flex items-center justify-center"
+                className={`relative mx-auto mb-8 h-36 w-36 overflow-hidden border border-red/30 bg-red/5 shadow-[0_0_60px_rgba(255,47,54,0.14)] ${glitchText ? 'translate-x-0.5' : ''}`}
               >
-                <div className={`text-6xl ${glitchText ? 'text-red' : ''}`}>🤖</div>
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,47,54,0.14),transparent)]" />
+                <div className="absolute inset-4 border border-white/10" />
+                <div className="absolute left-1/2 top-8 -translate-x-1/2 font-mono text-[9px] tracking-[0.35em] text-red/55">KAIRO.SYS</div>
+                <div className="absolute inset-x-0 top-16 text-center font-mono text-[10px] tracking-[0.2em] text-white/45">
+                  01001110
+                </div>
+                <motion.div
+                  className="absolute left-0 right-0 h-px bg-red/70"
+                  animate={{ top: ['18%', '82%', '18%'] }}
+                  transition={{ duration: 2.6, repeat: Infinity, ease: 'linear' }}
+                />
+                <div className="absolute bottom-8 left-1/2 h-5 w-16 -translate-x-1/2 rounded-full border border-red/50 bg-black">
+                  <div className="mx-auto mt-2 h-px w-10 bg-red/80" />
+                </div>
               </motion.div>
 
               <motion.div
@@ -100,7 +118,7 @@ export default function PostGamePage() {
                 <div className="font-mono text-[9px] text-red/40 tracking-[0.4em] mb-4">TRANSMISSÃO EXCLUSIVA</div>
                 <p className={`font-mono text-xs text-white/50 leading-relaxed mb-6 ${glitchText ? 'text-red/70' : ''}`}>
                   O que viste no grupo… era apenas a ponta.<br />
-                  Prepara-te. Isto não acabou.
+                  O canal não terminou. Só mudou de dono.
                 </p>
               </motion.div>
 
@@ -166,6 +184,20 @@ export default function PostGamePage() {
                 <h1 className="font-display text-4xl font-black">Ranking Final</h1>
               </div>
 
+              {!rankingGenerated && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-8 border border-white/10 bg-white/5 p-6 text-center"
+                >
+                  <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.32em] text-white/35">Sessão encerrada cedo</div>
+                  <p className="font-sans text-sm leading-relaxed text-white/58">
+                    Esta sala terminou antes de haver jogo suficiente para calcular desempenho real. Nenhum ranking, vencedor ou prêmio foi gerado.
+                  </p>
+                </motion.div>
+              )}
+
+              {rankingGenerated && (
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -188,9 +220,10 @@ export default function PostGamePage() {
                   <p className="font-sans text-sm leading-relaxed text-white/50">Ninguém registou voto secreto nesta sessão.</p>
                 )}
               </motion.div>
+              )}
 
               {/* Winner highlight */}
-              {allPlayers[0] && (
+              {rankingGenerated && allPlayers[0] && (
                 <motion.div
                   initial={{ scale: 0.95, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -213,12 +246,18 @@ export default function PostGamePage() {
               )}
 
               {/* Full ranking */}
+              {rankingGenerated && (
               <div className="space-y-2 mb-10">
                 {allPlayers.map((p, i) => {
                   const details = p.score_details || {}
                   const messages = Number(details.messagesSent ?? details.messages_sent ?? 0)
                   const votesReceived = Number(details.votesReceived ?? details.votes_received ?? 0)
                   const vetoTarget = String(details.veto_target_name || '')
+                  const investigation = Number(details.investigationScore ?? 0)
+                  const participation = Number(details.participationScore ?? 0)
+                  const decisions = Number(details.decisionScore ?? 0)
+                  const roleObjective = Number(details.roleObjectiveScore ?? 0)
+                  const social = Number(details.socialScore ?? 0)
                   return (
                     <motion.div
                       key={p.id}
@@ -242,6 +281,11 @@ export default function PostGamePage() {
                         </div>
                         <div className="font-mono text-[10px] text-white/30 mt-0.5">{p.role_label}</div>
                         <div className="mt-2 flex flex-wrap gap-2 font-mono text-[9px] text-white/28">
+                          <span>investigação {investigation}/30</span>
+                          <span>participação {participation}/20</span>
+                          <span>decisões {decisions}/20</span>
+                          <span>objetivo {roleObjective}/15</span>
+                          <span>social {social}/15</span>
                           <span>{messages} msg</span>
                           <span>{votesReceived} votos recebidos</span>
                           {vetoTarget && <span>votou: {vetoTarget}</span>}
@@ -255,6 +299,7 @@ export default function PostGamePage() {
                   )
                 })}
               </div>
+              )}
 
               {/* Winner message */}
               {isWinner && (

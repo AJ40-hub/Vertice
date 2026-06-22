@@ -28,6 +28,33 @@ function safeScoreDetails(player: any) {
   return player.score_details && typeof player.score_details === 'object' ? player.score_details : {}
 }
 
+function isScoredClue(clue: any) {
+  if (clue.content?.isPostgame) return false
+  return ['clue', 'photo', 'document', 'audio'].includes(clue.clue_type)
+}
+
+function clueStatsForPlayer(clues: any[], playerId: string) {
+  const playerClues = clues.filter((clue) => clue.player_id === playerId && isScoredClue(clue))
+  const openedClues = playerClues.filter((clue) => clue.opened_at)
+  const openedWithinDeadline = openedClues.filter((clue) => {
+    if (!clue.expires_at) return true
+    return new Date(clue.opened_at).getTime() <= new Date(clue.expires_at).getTime()
+  })
+  const delays = openedClues
+    .map((clue) => Math.max(0, (new Date(clue.opened_at).getTime() - new Date(clue.created_at).getTime()) / 1000))
+    .filter((delay) => Number.isFinite(delay))
+  const averageDelay = delays.length
+    ? Math.round(delays.reduce((total, delay) => total + delay, 0) / delays.length)
+    : null
+
+  return {
+    totalClues: playerClues.length,
+    cluesOpened: openedClues.length,
+    cluesOpenedWithinDeadline: openedWithinDeadline.length,
+    averageClueOpenDelaySeconds: averageDelay,
+  }
+}
+
 async function ensureFinishNotification(supabase: any, room: any, archive: { title?: string; subtitle?: string } | null, manualBeforeStart: boolean) {
   const { data: existingFinishNotification } = await supabase
     .from('notifications')
@@ -62,6 +89,7 @@ export default async function handler(req: any, res: any) {
     const supabase = getSupabaseAdmin()
     const roomId = typeof req.body?.room_id === 'string' ? req.body.room_id : ''
     const playerId = typeof req.body?.player_id === 'string' ? req.body.player_id : ''
+    const reportOnly = req.body?.report_only === true
     if (!roomId) return res.status(400).json({ error: 'Missing room_id' })
 
     const isAdmin = verifyAdminSession(req)
@@ -84,6 +112,12 @@ export default async function handler(req: any, res: any) {
     const archive = room.archives as { title?: string; subtitle?: string; duration_minutes?: number } | null
     const requiredDuration = Math.max(1, archive?.duration_minutes || 90) * 60
     const elapsedSeconds = elapsedSecondsForRoom(room)
+    const minimumRankingSeconds = Math.min(requiredDuration, 10 * 60)
+
+    if (reportOnly && room.status !== 'finished') {
+      return res.status(409).json({ error: 'O jogo ainda não terminou.' })
+    }
+
     const canFinish = isAdmin || isHostPlayer || room.status === 'finished' || elapsedSeconds >= requiredDuration
 
     if (!canFinish) {
@@ -106,7 +140,7 @@ export default async function handler(req: any, res: any) {
     const { data: players } = await supabase.from('players').select('*').eq('room_id', roomId)
     if (!players || players.length === 0) return res.status(404).json({ error: 'No players found' })
 
-    const shouldGenerateRanking = room.status === 'playing' || (room.status === 'finished' && Boolean(room.started_at))
+    const shouldGenerateRanking = Boolean(finishedRoom.started_at) && finalElapsedSeconds >= minimumRankingSeconds
     await ensureFinishNotification(supabase, finishedRoom, archive, !shouldGenerateRanking)
 
     if (!shouldGenerateRanking) {
@@ -118,9 +152,10 @@ export default async function handler(req: any, res: any) {
       })
     }
 
-    const [{ data: roomMessages }, { data: roomVotes }] = await Promise.all([
+    const [{ data: roomMessages }, { data: roomVotes }, { data: roomClues }] = await Promise.all([
       supabase.from('room_messages').select('*').eq('room_id', roomId),
       supabase.from('room_votes').select('*').eq('room_id', roomId),
+      supabase.from('clues').select('*').eq('room_id', roomId),
     ])
 
     const playerById = new Map(players.map((roomPlayer: any) => [roomPlayer.id, roomPlayer]))
@@ -167,8 +202,10 @@ export default async function handler(req: any, res: any) {
       const vote = voteByVoter.get(player.id)
       const votedPlayer = vote ? playerById.get(vote.suspect_player_id) : null
       const votesReceived = votesReceivedByPlayer.get(player.id) || 0
+      const clueStats = clueStatsForPlayer(roomClues || [], player.id)
       const details = calculateScoreDetails(player, finalElapsedSeconds, {
         ...stats,
+        ...clueStats,
         vetoCast: Boolean(vote),
         vetoTargetRole: votedPlayer?.role || null,
         votesReceived,
@@ -176,6 +213,10 @@ export default async function handler(req: any, res: any) {
       const scoreDetails = {
         ...safeScoreDetails(player),
         ...details,
+        total_clues: clueStats.totalClues,
+        clues_opened: clueStats.cluesOpened,
+        clues_opened_within_deadline: clueStats.cluesOpenedWithinDeadline,
+        average_clue_open_delay_seconds: clueStats.averageClueOpenDelaySeconds,
         votes_received: votesReceived,
         veto_target_name: votedPlayer?.name || null,
         veto_target_id: votedPlayer?.id || null,
@@ -189,7 +230,12 @@ export default async function handler(req: any, res: any) {
       return updatedPlayer || { ...player, score: details.score, score_details: scoreDetails }
     }))
 
-    const sortedPlayers = scoredPlayers.sort((a, b) => (b.score || 0) - (a.score || 0))
+    const sortedPlayers = scoredPlayers.sort((a, b) => (
+      (b.score || 0) - (a.score || 0) ||
+      Number(b.score_details?.investigationScore || 0) - Number(a.score_details?.investigationScore || 0) ||
+      Number(b.score_details?.participationScore || 0) - Number(a.score_details?.participationScore || 0) ||
+      String(a.name || '').localeCompare(String(b.name || ''), 'pt')
+    ))
     const winner = sortedPlayers[0]
 
     const { data: existingRanking } = await supabase.from('rankings').select('*').eq('room_id', roomId).maybeSingle()

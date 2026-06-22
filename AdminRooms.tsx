@@ -65,7 +65,7 @@ export default function AdminRooms() {
               <p className="font-mono text-xs text-white/40 leading-relaxed mb-8">
                 {closingBeforeStart
                   ? 'Esta ação vai encerrar a sala imediatamente. Como o jogo ainda não começou, não será gerado ranking, vencedor ou prémio.'
-                  : 'Esta ação vai encerrar a sala imediatamente. Os jogadores serão redirecionados para o ranking. Não pode ser desfeita.'}
+                  : 'Esta ação vai encerrar a sala imediatamente. O ranking só será gerado se já houver tempo suficiente de jogo real. Não pode ser desfeita.'}
               </p>
               <div className="flex gap-3">
                 <button
